@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase, supabaseAdmin } from '../utils/supabase'
-import { getTelegramUser, signUpWithTelegram } from '../services/telegram'
+import { getTelegramUser } from '../services/telegram'
 
 interface User {
   id: string

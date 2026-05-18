@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { haptic } from '../utils/animations'
 import { DataService } from '../services/data'
 import { useAuth } from '../hooks/useAuth'
+import { TonConnectButton, useTonWallet } from '@tonconnect/ui-react'
 
 interface LeaderboardEntry {
   username: string
@@ -15,34 +16,50 @@ const HomePage: React.FC = () => {
   const { user, loading: authLoading } = useAuth()
   const [isLoaded, setIsLoaded] = useState(false)
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
-  const [loading, setLoading] = useState(true)
+  const wallet = useTonWallet() as any
 
   useEffect(() => {
     loadData()
   }, [user])
 
+  useEffect(() => {
+    const walletAddress = wallet?.device?.address || wallet?.account?.address || (wallet as any)?.address
+    if (walletAddress && user) {
+      saveWalletToDb(walletAddress)
+    }
+  }, [wallet, user])
+
+  const saveWalletToDb = async (address: string) => {
+    if (!address || !user) return
+    try {
+      await DataService.saveWalletAddress(user.id, address)
+    } catch (error) {
+      console.error('Failed to save wallet address:', error)
+    }
+  }
+
   const loadData = async () => {
     try {
-      setLoading(true)
       const leaderboardData = await DataService.getLeaderboard(10)
       setLeaderboard(leaderboardData || [])
       setIsLoaded(true)
-      setLoading(false)
     } catch (error) {
       console.error('Failed to load data:', error)
       setIsLoaded(true)
-      setLoading(false)
     }
+  }
+
+  const walletConnected = !!wallet
+  const walletAddress = wallet?.device?.address || wallet?.account?.address || (wallet as any)?.address || null
+
+  const formatAddress = (address: string) => {
+    if (!address) return ''
+    return address.slice(0, 4) + '...' + address.slice(-4)
   }
 
   const totalSupply = 1000000000
   const claimedAmount = 145000000
   const claimProgress = (claimedAmount / totalSupply) * 100
-
-  const getUserDisplayName = () => {
-    if (!user) return 'Guest'
-    return user.full_name || user.username || 'User'
-  }
 
   if (authLoading) {
     return (
@@ -66,10 +83,12 @@ const HomePage: React.FC = () => {
               <p className="text-gray-400 text-sm">@{user?.username || 'guest'}</p>
             </div>
             <div className="relative">
+              {walletConnected && (
+                <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-3 border-gray-900 animate-pulse"></div>
+              )}
               <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
                 <span className="text-2xl">👤</span>
               </div>
-              <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-3 border-gray-900 animate-pulse"></div>
             </div>
           </div>
         </div>
@@ -80,23 +99,58 @@ const HomePage: React.FC = () => {
             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full -translate-y-1/2 translate-x-1/2"></div>
             
             <div className="relative z-10">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-sm font-medium text-gray-400">Total Balance</span>
-                <div className="flex items-center gap-1 px-2 py-1 bg-green-500/20 rounded-full">
-                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                  <span className="text-xs font-medium text-green-600">Live</span>
+              {walletConnected ? (
+                <>
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm font-medium text-gray-400">Total Balance</span>
+                    <div className="flex items-center gap-1 px-2 py-1 bg-green-500/20 rounded-full">
+                      <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                      <span className="text-xs font-medium text-green-600">Connected</span>
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-2 mb-2">
+                    <span className="text-4xl font-black text-white">{user?.balance?.toLocaleString() || 0}</span>
+                    <span className="text-lg font-bold text-blue-400">SMT</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 font-mono">{formatAddress(walletAddress)}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-4">
+                  <div className="text-lg font-bold text-white mb-2">Welcome Bonus</div>
+                  <div className="text-4xl font-black text-blue-400 mb-4">1,000 $SMT</div>
+                  <div className="text-sm text-gray-400 mb-4">Connect Wallet to Claim</div>
+                  <div className="flex justify-center">
+                    <TonConnectButton />
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-baseline gap-2 mb-2">
-                <span className="text-4xl font-black text-white">{user?.balance?.toLocaleString() || 0}</span>
-                <span className="text-lg font-bold text-blue-400">SMT</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-green-600">{user?.referral_count || 0} referrals</span>
-              </div>
+              )}
             </div>
           </div>
         </div>
+
+        {/* Stats Bar (only when connected) */}
+        {walletConnected && (
+          <div className={`mb-6 transition-all duration-700 delay-150 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+            <div className="flex gap-4 p-4 rounded-2xl bg-gray-900 border border-gray-800">
+              <div className="flex-1 text-center">
+                <p className="text-2xl font-bold text-white">{user?.referral_count || 0}</p>
+                <p className="text-xs text-gray-400">Referrals</p>
+              </div>
+              <div className="w-px bg-gray-700"></div>
+              <div className="flex-1 text-center">
+                <p className="text-2xl font-bold text-white">0</p>
+                <p className="text-xs text-gray-400">Rank</p>
+              </div>
+              <div className="w-px bg-gray-700"></div>
+              <div className="flex-1 text-center">
+                <p className="text-2xl font-bold text-blue-400">{(user?.balance || 0).toLocaleString()}</p>
+                <p className="text-xs text-gray-400">SMT</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Cylindrical Progress Bar */}
         <div className={`mb-6 transition-all duration-700 delay-150 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>

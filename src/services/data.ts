@@ -66,5 +66,16 @@ export const DataService = {
       .single()
     if (error) throw error
     return data
+  },
+
+  async saveWalletAddress(userId: string, walletAddress: string) {
+    const { data, error } = await supabase
+      .from('users')
+      .update({ wallet_address: walletAddress })
+      .eq('id', userId)
+      .select()
+      .single()
+    if (error) throw error
+    return data
   }
 }
