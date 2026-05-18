@@ -14,9 +14,11 @@
     "create-page": "npx generate-react-cli page"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.105.4",
     "@vkruglikov/react-telegram-web-app": "^2.1.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-router-dom": "^7.15.0",
     "rippleui": "^1.12.1"
   },
   "devDependencies": {

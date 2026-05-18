@@ -18,5 +18,5 @@
 }
 
 #root {
-  @apply flex h-screen w-screen items-center justify-center bg-background text-text;
+  @apply block h-screen w-full bg-background text-text;
 }
