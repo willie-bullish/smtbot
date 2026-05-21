@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { haptic, darkMode } from '../utils/animations';
 import { DataService } from '../services/data';
+import { useAuthContext } from '../contexts/AuthContext';
 
 interface LeaderboardEntry {
   username: string;
@@ -11,6 +12,7 @@ interface LeaderboardEntry {
 }
 
 const ProfilePage: React.FC = () => {
+  const { user } = useAuthContext();
   const [profileData] = useState({
     name: 'John Doe',
     wallet: '0x1234...5678',
@@ -19,41 +21,51 @@ const ProfilePage: React.FC = () => {
     level: 12,
     experience: 2450,
     nextLevelExp: 3000,
-    title: 'Productivity Master'
   });
 
   const [_, setIsDarkMode] = useState(darkMode.get());
   const [isLoaded, setIsLoaded] = useState(false);
   const [copied, setCopied] = useState(false);
   const walletConnected = true;
+  const displayWalletAddress = user?.wallet_address  
+    ? user.wallet_address.slice(0, 4) + '...' + user.wallet_address.slice(-4)
+    : '';
   const [tgUser, setTgUser] = useState<{ photo_url?: string; first_name?: string; last_name?: string } | null>(null);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'referrals' | 'leaderboard'>('referrals');
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-
-  const referrals = [
-    { id: 1, name: 'Alice Smith', date: '2024-02-15', reward: 100 },
-    { id: 2, name: 'Bob Johnson', date: '2024-02-18', reward: 100 },
-    { id: 3, name: 'Carol Williams', date: '2024-02-20', reward: 100 },
-    { id: 4, name: 'David Brown', date: '2024-02-22', reward: 100 },
-    { id: 5, name: 'Eva Martinez', date: '2024-02-25', reward: 100 },
-  ];
-
-  const totalReferrals = referrals.length;
-  // const totalEarned = totalReferrals * 500;
-  const referralLink = 'https://smt-claim.com/ref/user123';
-
+  const [referrals, setReferrals] = useState<{ id: string; username: string | null; full_name: string | null; created_at: string }[]>([]);
+  const [referralRewards, setReferralRewards] = useState<{ id: number; referred_user_id: string; reward_amount: number; created_at: string }[]>([]);
+  
+  const totalReferrals = user?.referral_count ?? 0;
+  const referralLink = user ? `https://t.me/smtdroptest_bot/app?startapp=${user.telegram_id}` : '';
+  
   useEffect(() => {
     setIsDarkMode(darkMode.get());
     setTimeout(() => setIsLoaded(true), 100);
-
+    
     const tg = (window as any).Telegram?.WebApp;
     if (tg?.initDataUnsafe?.user) {
       setTgUser(tg.initDataUnsafe.user);
     }
-
+    
     loadLeaderboard();
-  }, []);
+    if (user) loadReferrals();
+  }, [user]);
+
+  const loadReferrals = async () => {
+    if (!user) return;
+    try {
+      const [data, rewards] = await Promise.all([
+        DataService.getUserReferrals(user.id),
+        DataService.getUserReferralRewards(user.id)
+      ]);
+      setReferrals(data || []);
+      setReferralRewards(rewards || []);
+    } catch (error) {
+      console.error('Failed to load referrals:', error);
+    }
+  };
 
   const loadLeaderboard = async () => {
     try {
@@ -63,8 +75,6 @@ const ProfilePage: React.FC = () => {
       console.error('Failed to load leaderboard:', error);
     }
   };
-
-  const experiencePercentage = (profileData.experience / profileData.nextLevelExp) * 100;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(referralLink);
@@ -113,15 +123,12 @@ const ProfilePage: React.FC = () => {
                 </div>
                 <div className="flex-1">
                     <h2 className="text-xl font-bold text-white">
-                      {profileData.name}
+                      {user?.full_name || user?.username || 'User'}
                     </h2>
                   
                   <div className="flex items-center gap-2 mb-2">
                     <span className="px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-blue-600 to-blue-500 text-white">
                       Level {profileData.level}
-                    </span>
-                    <span className="text-sm text-gray-400">
-                      {profileData.title}
                     </span>
                   </div>
                   
@@ -132,27 +139,11 @@ const ProfilePage: React.FC = () => {
                           <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
                         </svg>
                       </div>
-                      <p className="text-sm text-gray-400">
-                        TON Wallet
+                      <p className="text-sm text-gray-400 font-mono">
+                        {displayWalletAddress}
                       </p>
                     </div>
                   ) : null}
-                </div>
-              </div>
-
-              {/* Experience Bar */}
-              <div className="mb-4">
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-gray-500">Experience</span>
-                  <span className="font-medium text-gray-300">
-                    {profileData.experience} / {profileData.nextLevelExp} XP
-                  </span>
-                </div>
-                <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-blue-600 to-blue-500 rounded-full transition-all duration-500 ease-out"
-                    style={{ width: `${experiencePercentage}%` }}
-                  />
                 </div>
               </div>
 
@@ -217,8 +208,8 @@ const ProfilePage: React.FC = () => {
                   {/* Earn per referral and Share/Copy */}
                   <div className="mb-4 p-3 rounded-xl bg-blue-600/10 border border-blue-600/20">
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm text-gray-300">Earn per referral</span>
-                      <span className="text-lg font-bold text-blue-400">100 $SMT</span>
+                      <span className="text-sm text-gray-300">Earned from referrals</span>
+                      <span className="text-lg font-bold text-blue-400">{referralRewards.reduce((sum, r) => sum + r.reward_amount, 0)} $SMT</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="flex-1 px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 overflow-hidden">
@@ -242,26 +233,38 @@ const ProfilePage: React.FC = () => {
                   {/* Referral List */}
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-gray-400 mb-3">Recent Referrals</div>
-                    {referrals.map((referral) => (
-                      <div 
-                        key={referral.id}
-                        className="flex items-center justify-between p-3 rounded-xl bg-gray-800/30 border border-gray-700/50"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-lg">
-                            {referral.name.charAt(0)}
+                    {referrals.length > 0 ? (
+                      referrals.map((referral) => {
+                        const reward = referralRewards.find(r => r.referred_user_id === referral.id);
+                        return (
+                        <div 
+                          key={referral.id}
+                          className="flex items-center justify-between p-3 rounded-xl bg-gray-800/30 border border-gray-700/50"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-lg">
+                              {(referral.full_name || referral.username || 'U').charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="font-medium text-white text-sm">{referral.full_name || referral.username || 'User'}</div>
+                              <div className="text-xs text-gray-500">{new Date(referral.created_at).toLocaleDateString()}</div>
+                            </div>
                           </div>
-                          <div>
-                            <div className="font-medium text-white text-sm">{referral.name}</div>
-                            <div className="text-xs text-gray-500">{referral.date}</div>
+                          <div className="text-right">
+                            <div className="text-sm font-bold text-green-400">+{reward?.reward_amount || 100}</div>
+                            <div className="text-xs text-gray-500">$SMT</div>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className="text-sm font-bold text-green-400">+{referral.reward}</div>
-                          <div className="text-xs text-gray-500">$SMT</div>
-                        </div>
+                        );
+                      })
+                    ) : (
+                      <div className="text-center py-6 px-4">
+                        <div className="text-3xl mb-2">🔗</div>
+                        <p className="text-gray-400 text-sm mb-3">No referrals yet</p>
+                        <p className="text-gray-500 text-xs">Copy your link and invite friends to earn 100 $SMT per referral!</p>
+                        <p className="text-gray-500 text-xs mt-2">Rewards are automatically credited when friends join via your link.</p>
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
               </div>

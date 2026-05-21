@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { supabase } from '../utils/supabase'
 import { getTelegramUser } from '../services/telegram'
+import { RealtimeChannel } from '@supabase/supabase-js'
 
 interface User {
   id: string
@@ -10,6 +11,22 @@ interface User {
   balance: number
   referral_count: number
   wallet_address?: string | null
+}
+
+interface AuthContextType {
+  user: User | null
+  loading: boolean
+  refreshUser: () => Promise<void>
+}
+
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  loading: true,
+  refreshUser: async () => {}
+})
+
+export function useAuthContext() {
+  return useContext(AuthContext)
 }
 
 async function callCreateUser(tgUser: { id: number; username?: string; first_name: string; last_name?: string }, referrerTelegramId?: number) {
@@ -46,17 +63,14 @@ async function callCreateUser(tgUser: { id: number; username?: string; first_nam
   return data.user || null;
 }
 
-export function useAuth() {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    initAuth()
-  }, [])
+  const initialized = useRef(false)
+  const channelRef = useRef<RealtimeChannel | null>(null)
 
   const initAuth = async () => {
     try {
-      setLoading(true)
       const tgUser = await getTelegramUser()
       
       if (!tgUser) {
@@ -73,6 +87,8 @@ export function useAuth() {
       if (existingUser) {
         setUser(existingUser)
         setLoading(false)
+        initialized.current = true
+        subscribeToUserUpdates(tgUser.id)
         return
       }
 
@@ -89,13 +105,77 @@ export function useAuth() {
 
       if (newUser) {
         setUser(newUser)
+        subscribeToUserUpdates(tgUser.id)
       }
     } catch (error) {
       console.error('Auth init error:', error)
     } finally {
       setLoading(false)
+      initialized.current = true
     }
   }
 
-  return { user, loading }
+  const refreshUser = async () => {
+    if (!user?.telegram_id) return
+    
+    try {
+      const { data: freshUser } = await supabase
+        .from('users')
+        .select('*')
+        .eq('telegram_id', user.telegram_id)
+        .single()
+      
+      if (freshUser) {
+        setUser(freshUser)
+      }
+    } catch (error) {
+      console.error('Refresh user error:', error)
+    }
+  }
+
+  const subscribeToUserUpdates = (telegramId: number) => {
+    if (channelRef.current) {
+      channelRef.current.unsubscribe()
+    }
+
+    const channel = supabase
+      .channel(`user-${telegramId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'users',
+          filter: `telegram_id=eq.${telegramId}`
+        },
+        (payload) => {
+          setUser((prev) => prev ? { ...prev, ...payload.new } : null)
+        }
+      )
+      .subscribe()
+
+    channelRef.current = channel
+  }
+
+  useEffect(() => {
+    return () => {
+      if (channelRef.current) {
+        channelRef.current.unsubscribe()
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!initialized.current) {
+      initAuth()
+    } else {
+      setLoading(false)
+    }
+  }, [])
+
+  return (
+    <AuthContext.Provider value={{ user, loading, refreshUser }}>
+      {children}
+    </AuthContext.Provider>
+  )
 }

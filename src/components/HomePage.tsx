@@ -1,56 +1,77 @@
 import React, { useState, useEffect } from 'react'
 import { haptic } from '../utils/animations'
 import { DataService } from '../services/data'
-import { useAuth } from '../hooks/useAuth'
+import { useAuthContext } from '../contexts/AuthContext'
 import { TonConnectButton, useTonWallet } from '@tonconnect/ui-react'
 
-interface LeaderboardEntry {
-  username: string
-  full_name: string
-  balance: number
-  referral_count: number
-  user_rank: number
+interface Announcement {
+  id: number
+  title: string
+  content: string
+  created_at: string
 }
 
 const HomePage: React.FC = () => {
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, refreshUser } = useAuthContext()
   const [isLoaded, setIsLoaded] = useState(false)
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
+  const [announcements, setAnnouncements] = useState<Announcement[]>([])
+  const [tgUser, setTgUser] = useState<{ photo_url?: string; first_name?: string; last_name?: string } | null>(null)
   const wallet = useTonWallet() as any
+  const walletAddress = wallet?.account?.address || wallet?.device?.address || (user as any)?.wallet_address || null
+  const walletConnected = !!(wallet?.account?.address || wallet?.device?.address || walletAddress)
 
   useEffect(() => {
     loadData()
-  }, [user])
+    if (user) {
+      refreshUser()
+    }
+  }, [])
 
   useEffect(() => {
-    const walletAddress = wallet?.device?.address || wallet?.account?.address || (wallet as any)?.address
-    if (walletAddress && user) {
-      saveWalletToDb(walletAddress)
+    loadData()
+    if (user) {
+      refreshUser()
+    }
+    const tg = (window as any).Telegram?.WebApp
+    if (tg?.initDataUnsafe?.user) {
+      setTgUser(tg.initDataUnsafe.user)
+    }
+  }, [])
+
+  useEffect(() => {
+    const addr = wallet?.device?.address || wallet?.account?.address || (wallet as any)?.address
+    if (addr && user && !(user as any)?.wallet_address) {
+      console.log('Wallet connected for first time, saving address and crediting bonus')
+      DataService.saveWalletAddress(user.id, addr).then(() => {
+        console.log('Wallet saved, now crediting welcome bonus')
+        DataService.creditWelcomeBonus(user.id, 1000).then(async (credited) => {
+          console.log('Welcome bonus credited:', credited)
+          if (credited) {
+            haptic.success()
+          }
+          await refreshUser()
+          console.log('User data refreshed, new balance should be visible')
+        }).catch((err) => {
+          console.error('Credit welcome bonus error:', err)
+        })
+      }).catch(console.error)
+    } else if (addr && user && (user as any)?.wallet_address && (user as any)?.wallet_address !== addr) {
+      DataService.saveWalletAddress(user.id, addr).then(() => {
+        refreshUser()
+      }).catch(console.error)
     }
   }, [wallet, user])
 
-  const saveWalletToDb = async (address: string) => {
-    if (!address || !user) return
-    try {
-      await DataService.saveWalletAddress(user.id, address)
-    } catch (error) {
-      console.error('Failed to save wallet address:', error)
-    }
-  }
-
   const loadData = async () => {
     try {
-      const leaderboardData = await DataService.getLeaderboard(10)
-      setLeaderboard(leaderboardData || [])
-      setIsLoaded(true)
+      const data = await DataService.getAnnouncements()
+      setAnnouncements(data || [])
     } catch (error) {
-      console.error('Failed to load data:', error)
+      console.error('Failed to load announcements:', error)
+    } finally {
       setIsLoaded(true)
     }
   }
-
-  const walletConnected = !!wallet
-  const walletAddress = wallet?.device?.address || wallet?.account?.address || (wallet as any)?.address || null
 
   const formatAddress = (address: string) => {
     if (!address) return ''
@@ -77,18 +98,25 @@ const HomePage: React.FC = () => {
         <div className={`transition-all duration-700 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           <div className="flex items-center justify-between mb-6">
             <div>
-              <p className="text-3xl font-medium text-blue-400 mb-1">
+              <p className="text-2xl font-medium text-blue-400 mb-1">
                 Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 18 ? 'Afternoon' : 'Evening'}
               </p>
-              <p className="text-gray-400 text-sm">@{user?.username || 'guest'}</p>
             </div>
             <div className="relative">
               {walletConnected && (
-                <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-3 border-gray-900 animate-pulse"></div>
+                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-gray-900 animate-pulse"></div>
               )}
-              <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
-                <span className="text-2xl">👤</span>
-              </div>
+              {tgUser?.photo_url ? (
+                <img 
+                  src={tgUser.photo_url} 
+                  alt="Profile" 
+                  className="w-10 h-10 rounded-2xl object-cover shadow-lg shadow-blue-500/30"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
+                  <span className="text-lg">👤</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -129,28 +157,6 @@ const HomePage: React.FC = () => {
             </div>
           </div>
         </div>
-
-        {/* Stats Bar (only when connected) */}
-        {walletConnected && (
-          <div className={`mb-6 transition-all duration-700 delay-150 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-            <div className="flex gap-4 p-4 rounded-2xl bg-gray-900 border border-gray-800">
-              <div className="flex-1 text-center">
-                <p className="text-2xl font-bold text-white">{user?.referral_count || 0}</p>
-                <p className="text-xs text-gray-400">Referrals</p>
-              </div>
-              <div className="w-px bg-gray-700"></div>
-              <div className="flex-1 text-center">
-                <p className="text-2xl font-bold text-white">0</p>
-                <p className="text-xs text-gray-400">Rank</p>
-              </div>
-              <div className="w-px bg-gray-700"></div>
-              <div className="flex-1 text-center">
-                <p className="text-2xl font-bold text-blue-400">{(user?.balance || 0).toLocaleString()}</p>
-                <p className="text-xs text-gray-400">SMT</p>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Cylindrical Progress Bar */}
         <div className={`mb-6 transition-all duration-700 delay-150 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
@@ -205,44 +211,29 @@ const HomePage: React.FC = () => {
         {/* Divider */}
         <div className={`flex items-center gap-4 mb-6 transition-all duration-700 delay-200 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent"></div>
-          <span className="text-xs text-gray-500 uppercase tracking-widest">Leaderboard</span>
+          <span className="text-xs text-gray-500 uppercase tracking-widest">Announcements</span>
           <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent"></div>
         </div>
 
-        {/* Leaderboard */}
+        {/* Announcements */}
         <div className={`transition-all duration-700 delay-300 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-          <div className="space-y-2">
-            {leaderboard.length > 0 ? (
-              leaderboard.map((entry, idx) => (
+          <div className="space-y-3">
+            {announcements.length > 0 ? (
+              announcements.map((ann) => (
                 <div
-                  key={idx}
-                  className={`flex items-center justify-between p-3 rounded-xl ${
-                    idx < 3 ? 'bg-gradient-to-r from-gray-800 to-gray-900 border border-gray-700' : 'bg-gray-900'
-                  }`}
+                  key={ann.id}
+                  className="p-4 rounded-xl bg-gray-900 border border-gray-800"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
-                      idx === 0 ? 'bg-yellow-500 text-black' :
-                      idx === 1 ? 'bg-gray-400 text-black' :
-                      idx === 2 ? 'bg-amber-600 text-white' :
-                      'bg-gray-700 text-gray-300'
-                    }`}>
-                      {entry.user_rank}
-                    </div>
-                    <div>
-                      <p className="font-medium text-white">{entry.username || entry.full_name}</p>
-                      <p className="text-xs text-gray-500">{entry.referral_count} referrals</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-blue-400">{entry.balance.toLocaleString()}</p>
-                    <p className="text-xs text-gray-500">SMT</p>
-                  </div>
+                  <h3 className="font-bold text-white mb-1">{ann.title}</h3>
+                  <p className="text-sm text-gray-400">{ann.content}</p>
+                  <p className="text-xs text-gray-600 mt-2">
+                    {new Date(ann.created_at).toLocaleDateString()}
+                  </p>
                 </div>
               ))
             ) : (
               <div className="text-center py-8 text-gray-500">
-                <p>No leaderboard data yet</p>
+                <p>No announcements yet</p>
               </div>
             )}
           </div>

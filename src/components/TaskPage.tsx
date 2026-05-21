@@ -1,30 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { haptic } from '../utils/animations';
 import { DataService } from '../services/data';
-import { useAuth } from '../hooks/useAuth';
+import { useAuthContext } from '../contexts/AuthContext';
+import { useToast } from './Toast';
 
 interface Task {
-  id: number;
-  title: string;
-  reward: string;
-  linkUrl: string;
-  completed: boolean;
-  verifying: boolean;
+  id: number
+  title: string
+  reward: string
+  linkUrl: string
+  completed: boolean
+  verifying: boolean
+  verifyType: 'auto' | 'manual' | 'referral' | 'telegram'
+  telegramChatId?: string
+  referralTarget?: number
 }
 
 const TaskPage: React.FC = () => {
-  const { user } = useAuth();
-  const [tasks, setTasks] = useState<Task[]>([
-    { id: 1, title: 'Follow us on twitter', reward: '100 SMT', linkUrl: 'https://twitter.com', completed: false, verifying: false },
-    { id: 2, title: 'Subscribe to our channel', reward: '100 SMT', linkUrl: 'https://telegram.org', completed: false, verifying: false },
-    { id: 3, title: 'Join our group', reward: '100 SMT', linkUrl: 'https://telegram.org', completed: false, verifying: false },
-    { id: 4, title: 'Refer 3 friends', reward: '300 SMT', linkUrl: '#', completed: false, verifying: true },
-    { id: 5, title: 'Refer 5 friends', reward: '500 SMT', linkUrl: '#', completed: false, verifying: true },
-    { id: 6, title: 'Refer 10 friends', reward: '1000 SMT', linkUrl: '#', completed: false, verifying: true }
-  ]);
+  const { user, loading } = useAuthContext();
+  const { showToast } = useToast();
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="animate-spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+      </div>
+    );
+  }
+  
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
   const [isLoaded, setIsLoaded] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [verifyingTaskId, setVerifyingTaskId] = useState<number | null>(null);
 
   useEffect(() => {
     setTimeout(() => setIsLoaded(true), 100);
@@ -34,28 +42,37 @@ const TaskPage: React.FC = () => {
   const loadTasks = async () => {
     if (!user) return;
     try {
-      setLoading(true);
+      setTasksLoading(true);
       const dbTasks = await DataService.getTasks();
       const userCompletions = await DataService.getUserTaskCompletions(user.id);
+      console.log('loadTasks: userCompletions:', userCompletions);
 
       if (dbTasks && dbTasks.length > 0) {
         const formattedTasks = dbTasks.map((task: any) => {
           const completion = userCompletions?.find((c: any) => c.task_id === task.id);
+          console.log('Task', task.id, 'completion:', completion);
           return {
             id: task.id,
             title: task.title,
             reward: `${task.reward} SMT`,
             linkUrl: task.link_url || '#',
             completed: completion?.verified || false,
-            verifying: completion ? !completion.verified : false
+            verifying: completion ? !completion.verified : false,
+            verifyType: task.verify_type || 'manual',
+            telegramChatId: task.telegram_chat_id || undefined,
+            referralTarget: task.referral_target || 0
           };
         });
+        console.log('formattedTasks:', formattedTasks);
         setTasks(formattedTasks);
+      } else {
+        setTasks([]);
       }
     } catch (error) {
       console.error('Failed to load tasks:', error);
+      setTasks([]);
     } finally {
-      setLoading(false);
+      setTasksLoading(false);
     }
   };
 
@@ -67,25 +84,102 @@ const TaskPage: React.FC = () => {
   };
 
   const handleCompleteTask = async (taskId: number, url: string) => {
-    if (!user) return;
+    console.log('handleCompleteTask called', { taskId, url, user: !!user, userId: user?.id });
+    
+    if (!user) {
+      console.error('User not loaded yet');
+      return;
+    }
 
     const task = tasks.find(t => t.id === taskId);
+    console.log('Task found:', task);
     if (!task || task.completed) return;
 
     if (task.verifying) {
+      // Prevent double-click
+      if (verifyingTaskId === taskId) return;
+      setVerifyingTaskId(taskId);
+      
+      console.log('VERIFY: task verifyType:', task.verifyType);
+      
       try {
-        await DataService.verifyTask(user.id, taskId, true);
+        let result: any = null;
+        
+        if (task.verifyType === 'telegram') {
+          // Telegram tasks need actual membership verification
+          const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
+          if (!tgUser) {
+            console.error('No Telegram user data available');
+            showToast('Unable to verify Telegram membership. Please open in Telegram.', 'error');
+            setVerifyingTaskId(null);
+            return;
+          }
+          
+          // Call Telegram verification via Edge Function
+          console.log('Calling verifyTelegramMembership with:', { telegramId: tgUser.id, chatId: task.telegramChatId });
+          const verified = await DataService.verifyTelegramMembership(
+            tgUser.id,
+            task.telegramChatId || ''
+          );
+          console.log('Telegram verification result:', verified);
+          
+          if (!verified) {
+            console.log('Telegram membership not confirmed');
+            showToast('You must complete the task first!', 'error');
+            setVerifyingTaskId(null);
+            // Reset task back to GO state
+            console.log('Deleting task completion for taskId:', taskId);
+            const deleted = await DataService.deleteTaskCompletion(user.id, taskId);
+            console.log('Delete result:', deleted);
+            loadTasks();
+            return;
+          }
+          
+          // Telegram verified, now complete the task
+          result = await DataService.verifyTask(user.id, taskId, true);
+          
+        } else if (task.verifyType === 'referral') {
+          // Referral tasks need to check referral count via RPC
+          console.log('Using autoVerifyAndCredit for referral task');
+          result = await DataService.autoVerifyAndCredit(user.id, taskId);
+          
+          if (!result) {
+            console.log('Referral verification failed - not enough referrals');
+            showToast('You must complete the task first!', 'warning');
+            setVerifyingTaskId(null);
+            // Reset task back to GO state
+            console.log('Deleting task completion for taskId:', taskId);
+            const deleted = await DataService.deleteTaskCompletion(user.id, taskId);
+            console.log('Delete result:', deleted);
+            loadTasks();
+            return;
+          }
+          
+        } else {
+          // Auto and manual tasks - simple verify
+          result = await DataService.verifyTask(user.id, taskId, true);
+        }
+        
+        console.log('VERIFY: result:', result);
         haptic.success();
         loadTasks();
       } catch (error) {
         console.error('Failed to verify task:', error);
+      } finally {
+        setVerifyingTaskId(null);
       }
     } else {
+      // First click - GO
+      console.log('GO: task verifyType:', task.verifyType, 'url:', url);
+      
+      // Open URL for tasks that have one
       if (url && url !== '#') {
         window.open(url, '_blank');
       }
+      
       try {
-        await DataService.completeTask(user.id, taskId);
+        const result = await DataService.completeTask(user.id, taskId);
+        console.log('GO: result:', result);
         haptic.light();
         loadTasks();
       } catch (error) {
@@ -164,7 +258,7 @@ const TaskPage: React.FC = () => {
         </div>
 
         {/* Tasks List */}
-        {loading ? (
+        {tasksLoading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
           </div>
@@ -202,17 +296,25 @@ const TaskPage: React.FC = () => {
                   </div>
                   
                   <button
-                    onClick={() => handleCompleteTask(task.id, task.linkUrl)}
-                    className={`px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
-                      task.completed
-                        ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                        : task.verifying
-                          ? 'bg-green-600 text-white hover:bg-green-500 hover:scale-105'
-                          : 'bg-blue-600 text-white hover:bg-blue-500 hover:shadow-lg hover:scale-105'
-                    }`}
-                    disabled={task.completed}
+                    type="button"
+                    onClick={function() {
+                      console.log('CLICK', task.id, task.linkUrl);
+                      handleCompleteTask(task.id, task.linkUrl);
+                    }}
+                    disabled={task.completed || verifyingTaskId === task.id}
+                    style={{
+                      backgroundColor: task.completed ? '#374151' : (verifyingTaskId === task.id ? '#6b7280' : (task.verifying ? '#16a34a' : '#2563eb')),
+                      color: task.completed ? '#9ca3af' : 'white',
+                      padding: '10px 20px',
+                      borderRadius: '12px',
+                      fontWeight: '500',
+                      fontSize: '14px',
+                      cursor: task.completed || verifyingTaskId === task.id ? 'not-allowed' : 'pointer',
+                      border: 'none',
+                      transition: 'all 0.2s'
+                    }}
                   >
-                    {task.completed ? 'Completed' : task.verifying ? 'VERIFY' : 'GO'}
+                    {task.completed ? 'Completed' : verifyingTaskId === task.id ? 'Loading...' : (task.verifying ? 'VERIFY' : 'GO')}
                   </button>
                 </div>
               </div>
@@ -222,19 +324,6 @@ const TaskPage: React.FC = () => {
 
         {filteredTasks.length === 0 && (
           <div className="text-center py-12">
-            <div className="text-6xl mb-4">
-              {filter === 'completed' ? '🎉' : filter === 'active' ? '🎯' : '📝'}
-            </div>
-            <h3 className="text-lg font-medium text-gray-400 mb-2">
-              {filter === 'completed' ? 'No completed tasks yet!' : 
-               filter === 'active' ? 'No active tasks!' : 
-               'No tasks yet!'}
-            </h3>
-            <p className="text-sm text-gray-500">
-              {filter === 'completed' ? 'Complete some tasks to see them here.' :
-               filter === 'active' ? 'All tasks are completed!' :
-               'No tasks available.'}
-            </p>
           </div>
         )}
 

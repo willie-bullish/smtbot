@@ -1,4 +1,4 @@
-import { supabase, supabaseAdmin } from '../utils/supabase'
+import { supabase } from '../utils/supabase'
 
 export interface TelegramUser {
   id: number
@@ -25,28 +25,38 @@ export async function getTelegramUser(): Promise<TelegramUser | null> {
   }
 }
 
-export async function signUpWithTelegram(tgUser: TelegramUser): Promise<any> {
-  const email = `telegram_${tgUser.id}@smtbot.app`
-  const password = generateRandomPassword()
+async function callCreateUser(tgUser: TelegramUser, referrerTelegramId?: number) {
+  const projectRef = import.meta.env.VITE_SUPABASE_URL?.replace('https://', '');
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-    email: email,
-    password: password,
-    email_confirm: true,
-    user_metadata: {
-      telegram_id: tgUser.id,
-      username: tgUser.username,
-      first_name: tgUser.first_name,
-      last_name: tgUser.last_name
-    }
-  })
-
-  if (authError) {
-    console.error('Auth signup error:', authError)
-    return null
+  if (!projectRef || !anonKey) {
+    console.error('Missing Supabase env vars');
+    return null;
   }
 
-  return authData.user
+  const response = await fetch(`https://${projectRef}/functions/v1/create-user`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${anonKey}`,
+      'apikey': anonKey,
+    },
+    body: JSON.stringify({
+      telegram_id: tgUser.id,
+      username: tgUser.username || `user_${tgUser.id}`,
+      full_name: [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || null,
+      referrer_telegram_id: referrerTelegramId || undefined,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    console.error('Create user failed:', err);
+    return null;
+  }
+
+  const data = await response.json();
+  return data.user || null;
 }
 
 export async function getOrCreateUser(): Promise<any> {
@@ -61,50 +71,16 @@ export async function getOrCreateUser(): Promise<any> {
 
   if (existingUser) return existingUser
 
+  const tg = (window as any).Telegram?.WebApp
   const urlParams = new URLSearchParams(window.location.search)
-  const startParam = urlParams.get('start')
+  const startParam = urlParams.get('start') || urlParams.get('startapp') || tg?.initDataUnsafe?.start_param || null
 
-  let referrerId: string | null = null
+  let referrerTelegramId: number | undefined
   if (startParam) {
-    const { data: referrer } = await supabase
-      .from('users')
-      .select('id')
-      .eq('telegram_id', parseInt(startParam))
-      .single()
-    
-    if (referrer) referrerId = referrer.id
+    referrerTelegramId = parseInt(startParam)
   }
 
-  const authUser = await signUpWithTelegram(tgUser)
-  if (!authUser) return null
-
-  const { data: newUser, error } = await supabase
-    .from('users')
-    .insert({
-      id: authUser.id,
-      telegram_id: tgUser.id,
-      username: tgUser.username || `user_${tgUser.id}`,
-      full_name: [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || null,
-      referrer_id: referrerId
-    })
-    .select()
-    .single()
-
-  if (error) {
-    console.error('Create user error:', error)
-    return null
-  }
-
-  return newUser
-}
-
-function generateRandomPassword(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-  let password = ''
-  for (let i = 0; i < 32; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return password
+  return await callCreateUser(tgUser, referrerTelegramId)
 }
 
 export async function getUserByTelegramId(telegramId: number) {
@@ -118,6 +94,7 @@ export async function getUserByTelegramId(telegramId: number) {
 }
 
 export function getReferrerFromUrl(): string | null {
+  const tg = (window as any).Telegram?.WebApp
   const urlParams = new URLSearchParams(window.location.search)
-  return urlParams.get('start')
+  return urlParams.get('start') || urlParams.get('startapp') || tg?.initDataUnsafe?.start_param || null
 }

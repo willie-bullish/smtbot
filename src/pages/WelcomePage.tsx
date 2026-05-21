@@ -13,7 +13,7 @@ interface Slide {
 const WelcomePage: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
-    const navigate = useNavigate();
+  const navigate = useNavigate();
 
   const slides: Slide[] = [
     {
@@ -26,7 +26,7 @@ const WelcomePage: React.FC = () => {
     {
       id: 2,
       title: "",
-      description: "...YET THE\nUNEXPECTED\nCAME FROM\nNOTHING",
+      description: "YET THE\nUNEXPECTED\nCAME FROM\nNOTHING",
       emoji: "",
       hologramColor: "magenta"
     },
