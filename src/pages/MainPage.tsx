@@ -34,7 +34,7 @@ const MainPage: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-950">
-      <div className="flex-1 pb-20">
+      <div className="flex-1 overflow-y-auto pb-20">
         {renderContent()}
       </div>
 

@@ -4,6 +4,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './components/Toast';
 import WelcomePage from './pages/WelcomePage';
 import MainPage from './pages/MainPage';
+import AdminPage from './components/AdminPage';
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
             <Routes>
               <Route path="/" element={<WelcomePage />} />
               <Route path="/main" element={<MainPage />} />
+              <Route path="/admin" element={<AdminPage />} />
             </Routes>
           </Router>
         </AuthProvider>

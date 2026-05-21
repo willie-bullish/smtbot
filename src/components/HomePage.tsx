@@ -21,13 +21,7 @@ const HomePage: React.FC = () => {
   const walletConnected = !!(wallet?.account?.address || wallet?.device?.address || walletAddress)
 
   useEffect(() => {
-    loadData()
-    if (user) {
-      refreshUser()
-    }
-  }, [])
-
-  useEffect(() => {
+    setTimeout(() => setIsLoaded(true), 100)
     loadData()
     if (user) {
       refreshUser()
@@ -44,7 +38,7 @@ const HomePage: React.FC = () => {
       console.log('Wallet connected for first time, saving address and crediting bonus')
       DataService.saveWalletAddress(user.id, addr).then(() => {
         console.log('Wallet saved, now crediting welcome bonus')
-        DataService.creditWelcomeBonus(user.id, 1000).then(async (credited) => {
+        DataService.creditWelcomeBonus(user.id).then(async (credited) => {
           console.log('Welcome bonus credited:', credited)
           if (credited) {
             haptic.success()
@@ -68,8 +62,6 @@ const HomePage: React.FC = () => {
       setAnnouncements(data || [])
     } catch (error) {
       console.error('Failed to load announcements:', error)
-    } finally {
-      setIsLoaded(true)
     }
   }
 
@@ -82,20 +74,12 @@ const HomePage: React.FC = () => {
   const claimedAmount = 145000000
   const claimProgress = (claimedAmount / totalSupply) * 100
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
-      </div>
-    )
-  }
-
   return (
-    <div className="min-h-screen bg-gray-950">
-      <div className="w-full max-w-md mx-auto px-4 pb-24 pt-6">
+  <div className="min-h-screen bg-gray-950">
+      <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl mx-auto px-4 pb-8 pt-2">
         
         {/* Header */}
-        <div className={`transition-all duration-700 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+        <div className={`mb-6 transition-all duration-700 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           <div className="flex items-center justify-between mb-6">
             <div>
               <p className="text-2xl font-medium text-blue-400 mb-1">
@@ -127,7 +111,30 @@ const HomePage: React.FC = () => {
             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full -translate-y-1/2 translate-x-1/2"></div>
             
             <div className="relative z-10">
-              {walletConnected ? (
+              {authLoading || !isLoaded ? (
+                <>
+                  <style>{`
+                    @keyframes skeleton-sweep {
+                      0% { background-position: -200% 0; }
+                      100% { background-position: 200% 0; }
+                    }
+                    .skeleton-shimmer {
+                      background: linear-gradient(90deg, #1f2937 25%, #2d3748 50%, #1f2937 75%);
+                      background-size: 200% 100%;
+                      animation: skeleton-sweep 1.8s ease-in-out infinite;
+                    }
+                  `}</style>
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm font-medium text-gray-400">Total Balance</span>
+                    <div className="skeleton-shimmer w-20 h-5 rounded-full" />
+                  </div>
+                  <div className="flex items-baseline gap-2 mb-2">
+                    <span className="skeleton-shimmer w-36 h-10 rounded-lg inline-block align-middle" />
+                    <span className="text-lg font-bold text-blue-400">SMT</span>
+                  </div>
+                  <div className="skeleton-shimmer w-28 h-4 rounded-lg" />
+                </>
+              ) : walletConnected ? (
                 <>
                   <div className="flex items-center justify-between mb-4">
                     <span className="text-sm font-medium text-gray-400">Total Balance</span>
@@ -209,14 +216,14 @@ const HomePage: React.FC = () => {
         </div>
 
         {/* Divider */}
-        <div className={`flex items-center gap-4 mb-6 transition-all duration-700 delay-200 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent"></div>
-          <span className="text-xs text-gray-500 uppercase tracking-widest">Announcements</span>
-          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent"></div>
+        <div className={`mb-6 transition-all duration-700 delay-200 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent"></div>
+            <span className="text-xs text-gray-500 uppercase tracking-widest">Announcements</span>
+            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent"></div>
         </div>
 
         {/* Announcements */}
-        <div className={`transition-all duration-700 delay-300 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+        <div className={`transition-all duration-700 delay-250 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           <div className="space-y-3">
             {announcements.length > 0 ? (
               announcements.map((ann) => (

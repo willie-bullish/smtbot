@@ -278,14 +278,13 @@ export const DataService = {
     }
   },
 
-  async creditWelcomeBonus(userId: string, amount: number = 1000) {
+  async creditWelcomeBonus(userId: string) {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
     
     try {
       const { data, error } = await supabase.rpc('credit_welcome_bonus', {
-        p_user_id: userId,
-        p_amount: amount
+        p_user_id: userId
       })
       clearTimeout(timeout)
       if (error) throw error
@@ -302,18 +301,85 @@ export const DataService = {
     const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
     
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .update({ wallet_address: walletAddress })
-        .eq('id', userId)
-        .select()
-        .single()
+      const { data, error } = await supabase.rpc('save_wallet_address', {
+        p_user_id: userId,
+        p_wallet_address: walletAddress
+      })
       clearTimeout(timeout)
       if (error) throw error
       return data
     } catch (e) {
       clearTimeout(timeout)
       console.error('Save wallet failed:', e)
+      return null
+    }
+  },
+
+  async adminAddTask(adminId: string, task: {
+    title: string
+    reward: number
+    link_url?: string
+    verify_type?: string
+    referral_target?: number
+    telegram_chat_id?: string
+  }) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    try {
+      const { data, error } = await supabase.rpc('admin_add_task', {
+        p_admin_id: adminId,
+        p_title: task.title,
+        p_reward: task.reward,
+        p_link_url: task.link_url || null,
+        p_verify_type: task.verify_type || 'manual',
+        p_referral_target: task.referral_target || 0,
+        p_telegram_chat_id: task.telegram_chat_id || null,
+      })
+      clearTimeout(timeout)
+      if (error) throw error
+      return data
+    } catch (e) {
+      clearTimeout(timeout)
+      console.error('Admin add task failed:', e)
+      return null
+    }
+  },
+
+  async adminAddAnnouncement(adminId: string, title: string, content: string) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    try {
+      const { data, error } = await supabase.rpc('admin_add_announcement', {
+        p_admin_id: adminId,
+        p_title: title,
+        p_content: content,
+      })
+      clearTimeout(timeout)
+      if (error) throw error
+      return data
+    } catch (e) {
+      clearTimeout(timeout)
+      console.error('Admin add announcement failed:', e)
+      return null
+    }
+  },
+
+  async adminGetAllUsers(adminId: string, search: string = '', page: number = 1, pageSize: number = 50) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    try {
+      const { data, error } = await supabase.rpc('admin_get_all_users', {
+        p_admin_id: adminId,
+        p_search: search,
+        p_page: page,
+        p_page_size: pageSize,
+      })
+      clearTimeout(timeout)
+      if (error) throw error
+      return data
+    } catch (e) {
+      clearTimeout(timeout)
+      console.error('Admin get users failed:', e)
       return null
     }
   }

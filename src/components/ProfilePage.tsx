@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { haptic, darkMode } from '../utils/animations';
 import { DataService } from '../services/data';
 import { useAuthContext } from '../contexts/AuthContext';
+import { toUserFriendlyAddress } from '@tonconnect/sdk';
 
 interface LeaderboardEntry {
   username: string;
@@ -13,6 +15,7 @@ interface LeaderboardEntry {
 
 const ProfilePage: React.FC = () => {
   const { user } = useAuthContext();
+  const navigate = useNavigate();
   const [profileData] = useState({
     name: 'John Doe',
     wallet: '0x1234...5678',
@@ -27,8 +30,13 @@ const ProfilePage: React.FC = () => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [copied, setCopied] = useState(false);
   const walletConnected = true;
-  const displayWalletAddress = user?.wallet_address  
-    ? user.wallet_address.slice(0, 4) + '...' + user.wallet_address.slice(-4)
+  const displayWalletAddress = user?.wallet_address
+    ? (() => {
+        const friendly = user.wallet_address.startsWith('0:')
+          ? toUserFriendlyAddress(user.wallet_address, false)
+          : user.wallet_address;
+        return friendly.slice(0, 4) + '***' + friendly.slice(-4);
+      })()
     : '';
   const [tgUser, setTgUser] = useState<{ photo_url?: string; first_name?: string; last_name?: string } | null>(null);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
@@ -36,6 +44,7 @@ const ProfilePage: React.FC = () => {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [referrals, setReferrals] = useState<{ id: string; username: string | null; full_name: string | null; created_at: string }[]>([]);
   const [referralRewards, setReferralRewards] = useState<{ id: number; referred_user_id: string; reward_amount: number; created_at: string }[]>([]);
+  const [referralsLoading, setReferralsLoading] = useState(false);
   
   const totalReferrals = user?.referral_count ?? 0;
   const referralLink = user ? `https://t.me/smtdroptest_bot/app?startapp=${user.telegram_id}` : '';
@@ -55,6 +64,7 @@ const ProfilePage: React.FC = () => {
 
   const loadReferrals = async () => {
     if (!user) return;
+    setReferralsLoading(true);
     try {
       const [data, rewards] = await Promise.all([
         DataService.getUserReferrals(user.id),
@@ -64,6 +74,8 @@ const ProfilePage: React.FC = () => {
       setReferralRewards(rewards || []);
     } catch (error) {
       console.error('Failed to load referrals:', error);
+    } finally {
+      setReferralsLoading(false);
     }
   };
 
@@ -96,7 +108,7 @@ const ProfilePage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-full bg-gray-950">
       <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl mx-auto px-4 pb-8 pt-6">
         
         {/* Premium Profile Header */}
@@ -105,6 +117,15 @@ const ProfilePage: React.FC = () => {
             {/* Glow effect */}
             <div className="absolute top-0 right-0 w-40 h-40 bg-blue-600/20 rounded-full blur-3xl"></div>
             <div className="absolute bottom-0 left-0 w-32 h-32 bg-purple-600/10 rounded-full blur-2xl"></div>
+
+            {user?.is_admin && (
+              <button
+                onClick={() => navigate('/admin')}
+                className="absolute top-4 right-4 flex items-center gap-1 px-3 py-1 rounded-full bg-green-500/20 text-xs font-medium text-green-600 hover:bg-green-500/30 transition-all"
+              >
+                ADMIN
+              </button>
+            )}
             
             <div className="relative">
               <div className="flex items-center mb-6">
@@ -233,7 +254,39 @@ const ProfilePage: React.FC = () => {
                   {/* Referral List */}
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-gray-400 mb-3">Recent Referrals</div>
-                    {referrals.length > 0 ? (
+                    {referralsLoading ? (
+                      <div className="space-y-2">
+                        <style>{`
+                          @keyframes skeleton-sweep {
+                            0% { background-position: -200% 0; }
+                            100% { background-position: 200% 0; }
+                          }
+                          .skeleton-shimmer {
+                            background: linear-gradient(90deg, #1f2937 25%, #2d3748 50%, #1f2937 75%);
+                            background-size: 200% 100%;
+                            animation: skeleton-sweep 1.8s ease-in-out infinite;
+                          }
+                        `}</style>
+                        {[1, 2, 3, 4].map((i) => (
+                          <div
+                            key={i}
+                            className="flex items-center justify-between p-3 rounded-xl bg-gray-800/30 border border-gray-700/50"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="skeleton-shimmer w-10 h-10 rounded-full flex-shrink-0" style={{ animationDelay: `${i * 0.08}s` }} />
+                              <div className="flex flex-col gap-2">
+                                <div className="skeleton-shimmer w-28 h-4 rounded-lg" style={{ animationDelay: `${i * 0.08}s` }} />
+                                <div className="skeleton-shimmer w-20 h-3 rounded-lg" style={{ animationDelay: `${i * 0.08}s` }} />
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="skeleton-shimmer w-12 h-4 rounded-lg" style={{ animationDelay: `${i * 0.08}s` }} />
+                              <div className="skeleton-shimmer w-8 h-3 rounded-lg" style={{ animationDelay: `${i * 0.08}s` }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : referrals.length > 0 ? (
                       referrals.map((referral) => {
                         const reward = referralRewards.find(r => r.referred_user_id === referral.id);
                         return (

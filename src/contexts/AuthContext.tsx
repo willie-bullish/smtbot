@@ -11,6 +11,7 @@ interface User {
   balance: number
   referral_count: number
   wallet_address?: string | null
+  is_admin?: boolean
 }
 
 interface AuthContextType {
@@ -29,12 +30,19 @@ export function useAuthContext() {
   return useContext(AuthContext)
 }
 
-async function callCreateUser(tgUser: { id: number; username?: string; first_name: string; last_name?: string }, referrerTelegramId?: number) {
+async function callCreateUser() {
   const projectRef = import.meta.env.VITE_SUPABASE_URL?.replace('https://', '');
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   if (!projectRef || !anonKey) {
     console.error('Missing Supabase env vars');
+    return null;
+  }
+
+  const tg = (window as any).Telegram?.WebApp;
+  const initData = tg?.initData;
+  if (!initData) {
+    console.error('No Telegram initData available');
     return null;
   }
 
@@ -45,12 +53,7 @@ async function callCreateUser(tgUser: { id: number; username?: string; first_nam
       'Authorization': `Bearer ${anonKey}`,
       'apikey': anonKey,
     },
-    body: JSON.stringify({
-      telegram_id: tgUser.id,
-      username: tgUser.username || `user_${tgUser.id}`,
-      full_name: [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || null,
-      referrer_telegram_id: referrerTelegramId || undefined,
-    }),
+    body: JSON.stringify({ initData }),
   });
 
   if (!response.ok) {
@@ -92,16 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return
       }
 
-      const tg = (window as any).Telegram?.WebApp
-      const urlParams = new URLSearchParams(window.location.search)
-      const startParam = urlParams.get('start') || urlParams.get('startapp') || tg?.initDataUnsafe?.start_param || null
-
-      let referrerTelegramId: number | undefined
-      if (startParam) {
-        referrerTelegramId = parseInt(startParam)
-      }
-
-      const newUser = await callCreateUser(tgUser, referrerTelegramId)
+      const newUser = await callCreateUser()
 
       if (newUser) {
         setUser(newUser)

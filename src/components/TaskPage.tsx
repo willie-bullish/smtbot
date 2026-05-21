@@ -180,6 +180,7 @@ const TaskPage: React.FC = () => {
       try {
         const result = await DataService.completeTask(user.id, taskId);
         console.log('GO: result:', result);
+
         haptic.light();
         loadTasks();
       } catch (error) {
@@ -259,8 +260,36 @@ const TaskPage: React.FC = () => {
 
         {/* Tasks List */}
         {tasksLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+            <div className="space-y-3 transition-all duration-700 delay-200">
+    <style>{`
+      @keyframes skeleton-sweep {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+      }
+      .skeleton-shimmer {
+        background: linear-gradient(90deg, #1f2937 25%, #2d3748 50%, #1f2937 75%);
+        background-size: 200% 100%;
+        animation: skeleton-sweep 1.8s ease-in-out infinite;
+      }
+    `}</style>
+    {[1, 2, 3, 4, 5, 6].map((i) => (
+      <div
+        key={i}
+        className="group relative p-4 rounded-2xl bg-gray-900 border border-gray-800"
+        style={{ animationDelay: `${i * 0.08}s` }}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center flex-1 min-w-0 gap-3">
+            <div className="skeleton-shimmer w-6 h-6 rounded-full flex-shrink-0" style={{ animationDelay: `${i * 0.08}s` }} />
+            <div className="flex-1 min-w-0">
+              <div className="skeleton-shimmer w-40 h-4 rounded-lg mb-2" style={{ animationDelay: `${i * 0.08}s` }} />
+              <div className="skeleton-shimmer w-16 h-5 rounded-full" style={{ animationDelay: `${i * 0.08}s` }} />
+            </div>
+          </div>
+          <div className="skeleton-shimmer w-14 h-10 rounded-xl flex-shrink-0" style={{ animationDelay: `${i * 0.08}s` }} />
+        </div>
+      </div>
+    ))}
           </div>
         ) : (
           <div className={`space-y-3 transition-all duration-700 delay-200 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
