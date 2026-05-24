@@ -45,16 +45,16 @@ const TaskPage: React.FC = () => {
       setTasksLoading(true);
       const dbTasks = await DataService.getTasks();
       const userCompletions = await DataService.getUserTaskCompletions(user.id);
-      console.log('loadTasks: userCompletions:', userCompletions);
+      const isPremium = (user as any)?.is_premium;
 
       if (dbTasks && dbTasks.length > 0) {
         const formattedTasks = dbTasks.map((task: any) => {
           const completion = userCompletions?.find((c: any) => c.task_id === task.id);
-          console.log('Task', task.id, 'completion:', completion);
+          const baseReward = task.reward;
           return {
             id: task.id,
             title: task.title,
-            reward: `${task.reward} SMT`,
+            reward: isPremium ? `${baseReward * 2} SMT` : `${baseReward} SMT`,
             linkUrl: task.link_url || '#',
             completed: completion?.verified || false,
             verifying: completion ? !completion.verified : false,
@@ -63,7 +63,6 @@ const TaskPage: React.FC = () => {
             referralTarget: task.referral_target || 0
           };
         });
-        console.log('formattedTasks:', formattedTasks);
         setTasks(formattedTasks);
       } else {
         setTasks([]);
@@ -290,9 +289,24 @@ const TaskPage: React.FC = () => {
         </div>
       </div>
     ))}
-          </div>
+            </div>
         ) : (
-          <div className={`space-y-3 transition-all duration-700 delay-200 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+          <div className={`transition-all duration-700 delay-200 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+            {/* Premium Banner */}
+            <div className="mb-4">
+              {(user as any)?.is_premium ? (
+                <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/30 flex items-center gap-2 transition-all duration-300">
+                  <span className="text-green-400 text-sm">✓</span>
+                  <p className="text-green-400 text-sm">You've upgraded to a premium user. All task rewards are now doubled.</p>
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center gap-2 transition-all duration-300">
+                  <span className="text-blue-400 text-sm">ℹ</span>
+                  <p className="text-blue-400 text-sm">Upgrade to premium to double all task rewards.</p>
+                </div>
+              )}
+            </div>
+            <div className="space-y-3">
             {filteredTasks.map((task) => (
               <div
                 key={task.id}
@@ -348,6 +362,7 @@ const TaskPage: React.FC = () => {
                 </div>
               </div>
             ))}
+            </div>
           </div>
         )}
 

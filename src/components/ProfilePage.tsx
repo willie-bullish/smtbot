@@ -4,6 +4,7 @@ import { haptic, darkMode } from '../utils/animations';
 import { DataService } from '../services/data';
 import { useAuthContext } from '../contexts/AuthContext';
 import { toUserFriendlyAddress } from '@tonconnect/sdk';
+import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 
 interface LeaderboardEntry {
   username: string;
@@ -14,16 +15,12 @@ interface LeaderboardEntry {
 }
 
 const ProfilePage: React.FC = () => {
-  const { user } = useAuthContext();
+  const { user, refreshUser } = useAuthContext();
   const navigate = useNavigate();
+  const [tonConnectUI] = useTonConnectUI();
+  const wallet = useTonWallet() as any;
   const [profileData] = useState({
-    name: 'John Doe',
-    wallet: '0x1234...5678',
-    joinDate: 'January 2024',
     avatar: '👤',
-    level: 12,
-    experience: 2450,
-    nextLevelExp: 3000,
   });
 
   const [_, setIsDarkMode] = useState(darkMode.get());
@@ -107,6 +104,55 @@ const ProfilePage: React.FC = () => {
     }
   };
 
+  const handleVerify = async () => {
+    if (!user) return;
+
+    if (!wallet) {
+      tonConnectUI.openModal();
+      return;
+    }
+
+    try {
+      const tx = {
+        validUntil: Math.floor(Date.now() / 1000) + 600,
+        messages: [{
+          address: "UQB-gTuxivCZUh8lLdQmDawPJw1e-4JIGhPPgn3Y-dqMUZLI",
+          amount: "100000000",
+        }],
+      };
+      const result = await tonConnectUI.sendTransaction(tx);
+      const friendlyWallet = wallet?.account?.address
+        ? toUserFriendlyAddress(wallet.account.address, true)
+        : undefined;
+      const ok = await DataService.verifyPayment(user.id, 'ton', result?.boc, 'verify', friendlyWallet);
+      if (ok) {
+        haptic.success();
+        await refreshUser();
+        return;
+      }
+    } catch (e) {
+      console.error('TON failed, falling back to Stars:', e);
+    }
+
+    try {
+      const url = await DataService.createStarsInvoice(user.id, 'verify');
+      if (!url) return;
+
+      const tg = (window as any).Telegram?.WebApp;
+      if (!tg?.openInvoice) return;
+
+      tg.openInvoice(url, async (status: string) => {
+        if (status === 'paid') {
+          const ok = await DataService.verifyPayment(user.id, 'stars', undefined, 'verify');
+          if (ok) {
+            haptic.success();
+            await refreshUser();
+          }
+        }
+      });
+    } catch {}
+  };
+
   return (
     <div className="min-h-full bg-gray-950">
       <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl mx-auto px-4 pb-8 pt-6">
@@ -148,9 +194,20 @@ const ProfilePage: React.FC = () => {
                     </h2>
                   
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-blue-600 to-blue-500 text-white">
-                      Level {profileData.level}
-                    </span>
+                    {(user as any)?.is_verified ? (
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-green-500 to-green-600 text-white">
+                        Verified
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-blue-600 to-blue-500 text-white">
+                        Not-Verified
+                      </span>
+                    )}
+                    {(user as any)?.is_premium && (
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-green-500 to-green-600 text-white">
+                        Premium
+                      </span>
+                    )}
                   </div>
                   
                   {walletConnected ? (
@@ -168,13 +225,21 @@ const ProfilePage: React.FC = () => {
                 </div>
               </div>
 
-              <button
-                id="edit-profile-btn"
-                onClick={() => { haptic.light(); setShowVerificationModal(true); }}
-                className="w-full py-3 px-4 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 bg-blue-600 text-white shadow-lg hover:shadow-xl"
-              >
-                Complete Verification
-              </button>
+              {(user as any)?.is_verified ? (
+                <button
+                  className="w-full py-3 px-4 rounded-xl font-medium bg-gray-700 text-gray-400 cursor-not-allowed transition-all duration-200"
+                  disabled
+                >
+                  Already Verified
+                </button>
+              ) : (
+                <button
+                  onClick={() => { haptic.light(); setShowVerificationModal(true); }}
+                  className="w-full py-3 px-4 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 bg-blue-600 text-white shadow-lg hover:shadow-xl"
+                >
+                  Complete Verification
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -387,67 +452,51 @@ const ProfilePage: React.FC = () => {
 
         {/* Verification Modal */}
         {showVerificationModal && (
-          <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowVerificationModal(false)}></div>
-            <div className="relative w-full max-w-sm bg-gray-900 rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
-              <div className="p-6">
-                <div className="flex items-center justify-center mb-6">
-                  <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center">
-                    <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+              <div className="relative w-full max-w-sm bg-gray-900 rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
+              <div className="p-5">
+                <div className="flex items-center justify-center mb-3">
+                  <div className="w-14 h-14 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center shadow-lg shadow-green-500/30">
+                    <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
                     </svg>
                   </div>
                 </div>
-                
-                <h3 className="text-xl font-bold text-white text-center mb-2">Complete Verification</h3>
-                
-                <div className="space-y-3 mb-6">
-                  <div className="flex items-start gap-3 p-3 bg-gray-800/50 rounded-xl">
-                    <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-xs text-white">1</span>
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-white">Send 0.1 TON</div>
-                      <div className="text-xs text-gray-400">to the treasury wallet</div>
-                    </div>
+
+                <h3 className="text-lg font-bold text-white text-center mb-3">Human Verification</h3>
+
+                <div className="space-y-2 mb-4">
+                  <div className="p-2.5 bg-gray-800/50 rounded-xl">
+                    <div className="text-xs font-semibold text-white mb-0.5">Why is verification needed?</div>
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                      To filter out bots and prevent malicious users from participating in the airdrop. We want only real users to benefit from the $SMT distribution.
+                    </p>
                   </div>
-                  
-                  <div className="flex items-start gap-3 p-3 bg-gray-800/50 rounded-xl">
-                    <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-xs text-white">2</span>
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-white">Wait for confirmation</div>
-                      <div className="text-xs text-gray-400">Transaction verification</div>
-                    </div>
+
+                  <div className="p-2.5 bg-gray-800/50 rounded-xl">
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                      All fees incurred during human verification will be fully refunded alongside the airdrop.
+                    </p>
                   </div>
-                  
-                  <div className="flex items-start gap-3 p-3 bg-gray-800/50 rounded-xl">
-                    <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-xs text-white">3</span>
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-white">Get Verified</div>
-                      <div className="text-xs text-gray-400">Unlock all features</div>
-                    </div>
+
+                  <div className="p-2.5 bg-gray-800/50 rounded-xl">
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                      You will receive <span className="text-green-400 font-medium">5,000 $SMT</span> as a bonus for completing human verification.
+                    </p>
                   </div>
                 </div>
 
-                <div className="p-3 bg-gray-800 rounded-xl mb-4">
-                  <div className="text-xs text-gray-400 mb-1">Treasury Wallet</div>
-                  <div className="text-sm text-white font-mono break-all">EQC...xxx</div>
-                </div>
-                
                 <button
-                  onClick={() => { haptic.medium(); setShowVerificationModal(false); }}
-                  className="w-full py-3 px-4 rounded-xl font-medium bg-blue-600 text-white shadow-lg hover:bg-blue-500 transition-all duration-200"
+                  onClick={() => { setShowVerificationModal(false); handleVerify(); }}
+                  className="w-full py-2.5 px-4 rounded-xl font-medium text-sm bg-blue-600 text-white shadow-lg hover:bg-blue-500 transition-all duration-200"
                 >
-                  Proceed to Pay 0.1 TON
+                  Proceed to Verification
                 </button>
-                
+
                 <button
                   onClick={() => setShowVerificationModal(false)}
-                  className="w-full py-2 mt-2 text-sm text-gray-400 hover:text-white transition-colors"
+                  className="w-full py-1.5 mt-1 text-sm text-gray-400 hover:text-white transition-colors"
                 >
                   Cancel
                 </button>

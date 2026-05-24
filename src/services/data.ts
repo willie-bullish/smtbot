@@ -112,7 +112,8 @@ export const DataService = {
         .from('tasks')
         .select('*')
         .eq('active', true)
-        .order('created_at', { ascending: true })
+        .order('referral_target', { ascending: true })
+        .order('id', { ascending: true })
       console.log('DataService.getTasks: data:', data, 'error:', error);
       clearTimeout(timeout)
       if (error) throw error
@@ -296,6 +297,70 @@ export const DataService = {
     }
   },
 
+  async createStarsInvoice(userId: string, type: 'upgrade' | 'verify' = 'upgrade') {
+    const projectRef = import.meta.env.VITE_SUPABASE_URL?.replace('https://', '');
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (!projectRef || !anonKey) return null;
+
+    try {
+      const resp = await fetch(`https://${projectRef}/functions/v1/create-invoice`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${anonKey}` },
+        body: JSON.stringify({ user_id: userId, type }),
+      });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      return data.url || null;
+    } catch { return null; }
+  },
+
+  async verifyPayment(userId: string, method: 'stars' | 'ton', txHash?: string, type: 'upgrade' | 'verify' = 'upgrade', userWallet?: string) {
+    const projectRef = import.meta.env.VITE_SUPABASE_URL?.replace('https://', '');
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (!projectRef || !anonKey) return false;
+
+    try {
+      const resp = await fetch(`https://${projectRef}/functions/v1/verify-payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${anonKey}` },
+        body: JSON.stringify({ user_id: userId, method, tx_hash: txHash, type, user_wallet: userWallet }),
+      });
+      if (!resp.ok) return false;
+      const data = await resp.json();
+      return data.upgraded === true;
+    } catch { return false; }
+  },
+
+  async verifyUser(userId: string) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    try {
+      const { data, error } = await supabase.rpc('verify_user', { p_user_id: userId })
+      clearTimeout(timeout)
+      if (error) throw error
+      return data
+    } catch (e) {
+      clearTimeout(timeout)
+      console.error('Verify user failed:', e)
+      return false
+    }
+  },
+
+  async upgradeUser(userId: string) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    try {
+      const { data, error } = await supabase.rpc('upgrade_user', { p_user_id: userId })
+      clearTimeout(timeout)
+      if (error) throw error
+      return data
+    } catch (e) {
+      clearTimeout(timeout)
+      console.error('Upgrade user failed:', e)
+      return false
+    }
+  },
+
   async saveWalletAddress(userId: string, walletAddress: string) {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
@@ -360,6 +425,76 @@ export const DataService = {
     } catch (e) {
       clearTimeout(timeout)
       console.error('Admin add announcement failed:', e)
+      return null
+    }
+  },
+
+  async adminGetAllTasks(adminId: string) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    try {
+      const { data, error } = await supabase.rpc('admin_get_all_tasks', {
+        p_admin_id: adminId,
+      })
+      clearTimeout(timeout)
+      if (error) throw error
+      return data
+    } catch (e) {
+      clearTimeout(timeout)
+      console.error('Admin get tasks failed:', e)
+      return null
+    }
+  },
+
+  async adminGetAllAnnouncements(adminId: string) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    try {
+      const { data, error } = await supabase.rpc('admin_get_all_announcements', {
+        p_admin_id: adminId,
+      })
+      clearTimeout(timeout)
+      if (error) throw error
+      return data
+    } catch (e) {
+      clearTimeout(timeout)
+      console.error('Admin get announcements failed:', e)
+      return null
+    }
+  },
+
+  async adminDeleteAnnouncement(adminId: string, announcementId: number) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    try {
+      const { data, error } = await supabase.rpc('admin_delete_announcement', {
+        p_admin_id: adminId,
+        p_announcement_id: announcementId,
+      })
+      clearTimeout(timeout)
+      if (error) throw error
+      return data
+    } catch (e) {
+      clearTimeout(timeout)
+      console.error('Admin delete announcement failed:', e)
+      return null
+    }
+  },
+
+  async adminDeleteTask(adminId: string, taskId: number) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    try {
+      const { data, error } = await supabase.rpc('admin_delete_task', {
+        p_admin_id: adminId,
+        p_task_id: taskId,
+      })
+      clearTimeout(timeout)
+      if (error) throw error
+      return data
+    } catch (e) {
+      clearTimeout(timeout)
+      console.error('Admin delete task failed:', e)
       return null
     }
   },

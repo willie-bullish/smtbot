@@ -68,6 +68,18 @@ const TaskForm: React.FC<{ adminId: string; flash: (t: string, ok: boolean) => v
   const [referralTarget, setReferralTarget] = useState('0');
   const [telegramChatId, setTelegramChatId] = useState('');
   const [saving, setSaving] = useState(false);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [deleting, setDeleting] = useState<number | null>(null);
+
+  const loadTasks = async () => {
+    setLoadingTasks(true);
+    const result = await DataService.adminGetAllTasks(adminId);
+    setLoadingTasks(false);
+    if (result) setTasks(result.tasks || []);
+  };
+
+  React.useEffect(() => { loadTasks(); }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,43 +98,91 @@ const TaskForm: React.FC<{ adminId: string; flash: (t: string, ok: boolean) => v
       flash('Task added', true);
       setTitle(''); setReward(''); setLinkUrl('');
       setVerifyType('manual'); setReferralTarget('0'); setTelegramChatId('');
+      loadTasks();
     } else {
       flash('Failed to add task', false);
     }
   };
 
+  const handleDelete = async (taskId: number) => {
+    if (!confirm('Delete this task? This cannot be undone.')) return;
+    setDeleting(taskId);
+    const ok = await DataService.adminDeleteTask(adminId, taskId);
+    setDeleting(null);
+    if (ok) {
+      flash('Task deleted', true);
+      loadTasks();
+    } else {
+      flash('Failed to delete task', false);
+    }
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <Input label="Title" value={title} onChange={setTitle} required />
-      <Input label="Reward" type="number" value={reward} onChange={setReward} required />
-      <Input label="Link URL" value={linkUrl} onChange={setLinkUrl} />
-      <div>
-        <label className="block text-sm text-gray-400 mb-1">Verify Type</label>
-        <select
-          value={verifyType}
-          onChange={(e) => setVerifyType(e.target.value)}
-          className="w-full p-3 rounded-xl bg-gray-800 border border-gray-700 text-white text-sm"
-        >
-          <option value="manual">Manual</option>
-          <option value="auto">Auto</option>
-          <option value="referral">Referral</option>
-          <option value="telegram">Telegram</option>
-        </select>
+    <div className="space-y-6">
+      <div className="p-4 rounded-2xl bg-gray-900 border border-gray-800">
+        <h3 className="text-sm font-medium text-gray-400 mb-4">Add New Task</h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input label="Title" value={title} onChange={setTitle} required />
+          <Input label="Reward" type="number" value={reward} onChange={setReward} required />
+          <Input label="Link URL" value={linkUrl} onChange={setLinkUrl} />
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Verify Type</label>
+            <select
+              value={verifyType}
+              onChange={(e) => setVerifyType(e.target.value)}
+              className="w-full p-3 rounded-xl bg-gray-800 border border-gray-700 text-white text-sm"
+            >
+              <option value="manual">Manual</option>
+              <option value="auto">Auto</option>
+              <option value="referral">Referral</option>
+              <option value="telegram">Telegram</option>
+            </select>
+          </div>
+          {verifyType === 'referral' && (
+            <Input label="Referral Target" type="number" value={referralTarget} onChange={setReferralTarget} />
+          )}
+          {verifyType === 'telegram' && (
+            <Input label="Telegram Chat ID" value={telegramChatId} onChange={setTelegramChatId} placeholder="@chat or -100..." />
+          )}
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full py-3 rounded-xl font-medium bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 transition-all"
+          >
+            {saving ? 'Saving...' : 'Add Task'}
+          </button>
+        </form>
       </div>
-      {verifyType === 'referral' && (
-        <Input label="Referral Target" type="number" value={referralTarget} onChange={setReferralTarget} />
-      )}
-      {verifyType === 'telegram' && (
-        <Input label="Telegram Chat ID" value={telegramChatId} onChange={setTelegramChatId} placeholder="@chat or -100..." />
-      )}
-      <button
-        type="submit"
-        disabled={saving}
-        className="w-full py-3 rounded-xl font-medium bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 transition-all"
-      >
-        {saving ? 'Saving...' : 'Add Task'}
-      </button>
-    </form>
+
+      <div className="p-4 rounded-2xl bg-gray-900 border border-gray-800">
+        <h3 className="text-sm font-medium text-gray-400 mb-4">Existing Tasks</h3>
+        {loadingTasks ? (
+          <p className="text-gray-500 text-sm">Loading...</p>
+        ) : tasks.length === 0 ? (
+          <p className="text-gray-500 text-sm">No tasks yet</p>
+        ) : (
+          <div className="space-y-2">
+            {tasks.map((t: any) => (
+              <div key={t.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-800/50 border border-gray-700/50">
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-sm font-medium truncate">{t.title}</p>
+                  <p className="text-xs text-gray-400">
+                    {t.reward} SMT · {t.verify_type}{t.referral_target > 0 ? ` · need ${t.referral_target}` : ''}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleDelete(t.id)}
+                  disabled={deleting === t.id}
+                  className="ml-3 px-3 py-1.5 rounded-lg bg-red-600/20 text-red-400 text-xs font-medium hover:bg-red-600/30 disabled:opacity-50"
+                >
+                  {deleting === t.id ? '...' : 'Delete'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 
@@ -130,6 +190,18 @@ const AnnouncementForm: React.FC<{ adminId: string; flash: (t: string, ok: boole
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [saving, setSaving] = useState(false);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState<number | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    const result = await DataService.adminGetAllAnnouncements(adminId);
+    setLoading(false);
+    if (result) setAnnouncements(result.announcements || []);
+  };
+
+  React.useEffect(() => { load(); }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,32 +212,81 @@ const AnnouncementForm: React.FC<{ adminId: string; flash: (t: string, ok: boole
     if (result) {
       flash('Announcement added', true);
       setTitle(''); setContent('');
+      load();
     } else {
       flash('Failed to add announcement', false);
     }
   };
 
+  const handleDelete = async (id: number) => {
+    if (!confirm('Delete this announcement?')) return;
+    setDeleting(id);
+    const ok = await DataService.adminDeleteAnnouncement(adminId, id);
+    setDeleting(null);
+    if (ok) {
+      flash('Announcement deleted', true);
+      load();
+    } else {
+      flash('Failed to delete announcement', false);
+    }
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <Input label="Title" value={title} onChange={setTitle} required />
-      <div>
-        <label className="block text-sm text-gray-400 mb-1">Content</label>
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          required
-          rows={4}
-          className="w-full p-3 rounded-xl bg-gray-800 border border-gray-700 text-white text-sm resize-none"
-        />
+    <div className="space-y-6">
+      <div className="p-4 rounded-2xl bg-gray-900 border border-gray-800">
+        <h3 className="text-sm font-medium text-gray-400 mb-4">Add New Announcement</h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input label="Title" value={title} onChange={setTitle} required />
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Content</label>
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              required
+              rows={4}
+              className="w-full p-3 rounded-xl bg-gray-800 border border-gray-700 text-white text-sm resize-none"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full py-3 rounded-xl font-medium bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 transition-all"
+          >
+            {saving ? 'Saving...' : 'Add Announcement'}
+          </button>
+        </form>
       </div>
-      <button
-        type="submit"
-        disabled={saving}
-        className="w-full py-3 rounded-xl font-medium bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 transition-all"
-      >
-        {saving ? 'Saving...' : 'Add Announcement'}
-      </button>
-    </form>
+
+      <div className="p-4 rounded-2xl bg-gray-900 border border-gray-800">
+        <h3 className="text-sm font-medium text-gray-400 mb-4">Existing Announcements</h3>
+        {loading ? (
+          <p className="text-gray-500 text-sm">Loading...</p>
+        ) : announcements.length === 0 ? (
+          <p className="text-gray-500 text-sm">No announcements yet</p>
+        ) : (
+          <div className="space-y-2">
+            {announcements.map((a: any) => (
+              <div key={a.id} className="p-3 rounded-xl bg-gray-800/50 border border-gray-700/50">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-sm font-medium">{a.title}</p>
+                    <p className="text-xs text-gray-400 mt-1 line-clamp-2">{a.content}</p>
+                    <p className="text-xs text-gray-500 mt-1">{new Date(a.created_at).toLocaleDateString()}</p>
+                  </div>
+                  <button
+                    onClick={() => handleDelete(a.id)}
+                    disabled={deleting === a.id}
+                    className="ml-3 px-3 py-1.5 rounded-lg bg-red-600/20 text-red-400 text-xs font-medium hover:bg-red-600/30 disabled:opacity-50 flex-shrink-0"
+                  >
+                    {deleting === a.id ? '...' : 'Delete'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { haptic } from '../utils/animations'
 import { DataService } from '../services/data'
 import { useAuthContext } from '../contexts/AuthContext'
-import { TonConnectButton, useTonWallet } from '@tonconnect/ui-react'
+import { TonConnectButton, useTonWallet, useTonConnectUI } from '@tonconnect/ui-react'
+import { toUserFriendlyAddress } from '@tonconnect/sdk';
 
 interface Announcement {
   id: number
@@ -17,6 +18,7 @@ const HomePage: React.FC = () => {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [tgUser, setTgUser] = useState<{ photo_url?: string; first_name?: string; last_name?: string } | null>(null)
   const wallet = useTonWallet() as any
+  const [tonConnectUI] = useTonConnectUI()
   const walletAddress = wallet?.account?.address || wallet?.device?.address || (user as any)?.wallet_address || null
   const walletConnected = !!(wallet?.account?.address || wallet?.device?.address || walletAddress)
 
@@ -64,6 +66,60 @@ const HomePage: React.FC = () => {
       console.error('Failed to load announcements:', error)
     }
   }
+
+  const handleUpgrade = async () => {
+    if (!user) return;
+
+    // Ensure wallet is connected first
+    if (!wallet) {
+      tonConnectUI.openModal();
+      return;
+    }
+
+    // Try TON
+    try {
+      const tx = {
+        validUntil: Math.floor(Date.now() / 1000) + 600,
+        messages: [{
+          address: "UQB-gTuxivCZUh8lLdQmDawPJw1e-4JIGhPPgn3Y-dqMUZLI",
+          amount: "100000000",
+        }],
+      };
+      console.log('Sending TON transaction...', tx);
+      const result = await tonConnectUI.sendTransaction(tx);
+      console.log('TON result:', result);
+      const friendlyWallet = wallet?.account?.address
+        ? toUserFriendlyAddress(wallet.account.address, true)
+        : undefined;
+      const ok = await DataService.verifyPayment(user.id, 'ton', result?.boc, 'upgrade', friendlyWallet);
+      if (ok) {
+        haptic.success();
+        await refreshUser();
+        return;
+      }
+    } catch (e) {
+      console.error('TON failed, falling back to Stars:', e);
+    }
+
+    // Fallback to Stars
+    try {
+      const url = await DataService.createStarsInvoice(user.id);
+      if (!url) return;
+
+      const tg = (window as any).Telegram?.WebApp;
+      if (!tg?.openInvoice) return;
+
+      tg.openInvoice(url, async (status: string) => {
+        if (status === 'paid') {
+          const ok = await DataService.verifyPayment(user.id, 'stars');
+          if (ok) {
+            haptic.success();
+            await refreshUser();
+          }
+        }
+      });
+    } catch {}
+  };
 
   const formatAddress = (address: string) => {
     if (!address) return ''
@@ -149,6 +205,9 @@ const HomePage: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500 font-mono">{formatAddress(walletAddress)}</span>
+                    {(user as any)?.is_premium && (
+                      <span className="ml-2 px-2 py-0.5 rounded-full bg-green-500/20 text-green-500 text-xs font-medium">PREMIUM</span>
+                    )}
                   </div>
                 </>
               ) : (
@@ -247,6 +306,7 @@ const HomePage: React.FC = () => {
         </div>
 
         {/* Premium Banner */}
+        {(user as any)?.is_premium ? null : (
         <div className={`mt-6 p-5 rounded-3xl bg-blue-600 relative overflow-hidden transition-all duration-700 delay-500 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2"></div>
           <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2"></div>
@@ -257,13 +317,14 @@ const HomePage: React.FC = () => {
               <p className="text-white/80 text-sm">Get 2x rewards & exclusive perks</p>
             </div>
             <button 
-              onClick={() => { haptic.medium(); }}
+              onClick={() => { haptic.medium(); handleUpgrade(); }}
               className="px-5 py-2.5 bg-white text-blue-600 font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300"
             >
               Upgrade
             </button>
           </div>
         </div>
+        )}
       </div>
 
       <style dangerouslySetInnerHTML={{ __html: `
@@ -275,6 +336,7 @@ const HomePage: React.FC = () => {
           animation: shimmer 2s ease-in-out infinite;
         }
       `}} />
+
     </div>
   )
 }

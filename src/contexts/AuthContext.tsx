@@ -12,6 +12,8 @@ interface User {
   referral_count: number
   wallet_address?: string | null
   is_admin?: boolean
+  is_premium?: boolean
+  is_verified?: boolean
 }
 
 interface AuthContextType {
@@ -85,7 +87,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .from('users')
         .select('*')
         .eq('telegram_id', tgUser.id)
-        .single()
+        .limit(1)
+        .maybeSingle()
 
       if (existingUser) {
         setUser(existingUser)
@@ -117,7 +120,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .from('users')
         .select('*')
         .eq('telegram_id', user.telegram_id)
-        .single()
+        .limit(1)
+        .maybeSingle()
       
       if (freshUser) {
         setUser(freshUser)

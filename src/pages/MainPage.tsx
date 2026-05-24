@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import TaskPage from '../components/TaskPage';
 import HomePage from '../components/HomePage';
 import ProfilePage from '../components/ProfilePage';
@@ -6,6 +6,11 @@ import { haptic } from '../utils/animations';
 
 const MainPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'task' | 'home' | 'profile'>('home');
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo(0, 0);
+  }, [activeTab]);
 
   const tabs = [
     { id: 'task', label: 'Task', icon: '📋', color: 'from-blue-500 to-blue-600' },
@@ -33,8 +38,8 @@ const MainPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-950">
-      <div className="flex-1 overflow-y-auto pb-20">
+    <div className="min-h-screen flex flex-col bg-gray-950 overflow-hidden">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto pb-20 min-h-0">
         {renderContent()}
       </div>
 
