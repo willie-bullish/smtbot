@@ -8,7 +8,7 @@ import AdminPage from './components/AdminPage';
 
 function App() {
   return (
-    <TonConnectUIProvider manifestUrl="https://smtbot.vercel.app/tonconnect-manifest.json">
+    <TonConnectUIProvider manifestUrl="https://smtbot.vercel.app/tonconnect-manifest.json" restoreConnection={false}>
       <ToastProvider>
         <AuthProvider>
           <Router>

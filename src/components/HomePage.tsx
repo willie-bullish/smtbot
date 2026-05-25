@@ -19,44 +19,30 @@ const HomePage: React.FC = () => {
   const [tgUser, setTgUser] = useState<{ photo_url?: string; first_name?: string; last_name?: string } | null>(null)
   const wallet = useTonWallet() as any
   const [tonConnectUI] = useTonConnectUI()
-  const walletAddress = wallet?.account?.address || wallet?.device?.address || (user as any)?.wallet_address || null
-  const walletConnected = !!(wallet?.account?.address || wallet?.device?.address || walletAddress)
+  const walletAddress = wallet?.account?.address || wallet?.device?.address || null
+  const walletConnected = !!walletAddress
 
   useEffect(() => {
     setTimeout(() => setIsLoaded(true), 100)
     loadData()
-    if (user) {
-      refreshUser()
-    }
     const tg = (window as any).Telegram?.WebApp
     if (tg?.initDataUnsafe?.user) {
       setTgUser(tg.initDataUnsafe.user)
     }
   }, [])
 
+  // Credit welcome bonus when user connects a wallet for the first time
   useEffect(() => {
-    const addr = wallet?.device?.address || wallet?.account?.address || (wallet as any)?.address
-    if (addr && user && !(user as any)?.wallet_address) {
-      console.log('Wallet connected for first time, saving address and crediting bonus')
-      DataService.saveWalletAddress(user.id, addr).then(() => {
-        console.log('Wallet saved, now crediting welcome bonus')
-        DataService.creditWelcomeBonus(user.id).then(async (credited) => {
-          console.log('Welcome bonus credited:', credited)
-          if (credited) {
-            haptic.success()
-          }
-          await refreshUser()
-          console.log('User data refreshed, new balance should be visible')
-        }).catch((err) => {
-          console.error('Credit welcome bonus error:', err)
-        })
-      }).catch(console.error)
-    } else if (addr && user && (user as any)?.wallet_address && (user as any)?.wallet_address !== addr) {
-      DataService.saveWalletAddress(user.id, addr).then(() => {
+    const unsubscribe = tonConnectUI.onStatusChange(async (w: any) => {
+      if (!w || !user) return
+      const ok = await DataService.creditWelcomeBonus(user.id)
+      if (ok) {
+        haptic.success()
         refreshUser()
-      }).catch(console.error)
-    }
-  }, [wallet, user])
+      }
+    })
+    return unsubscribe
+  }, [user])
 
   const loadData = async () => {
     try {

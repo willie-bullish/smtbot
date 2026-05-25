@@ -11,6 +11,7 @@ interface User {
   balance: number
   referral_count: number
   wallet_address?: string | null
+  welcome_bonus_claimed?: boolean
   is_admin?: boolean
   is_premium?: boolean
   is_verified?: boolean
