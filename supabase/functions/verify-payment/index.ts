@@ -6,9 +6,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const TREASURY_ADDRESS = "UQB-gTuxivCZUh8lLdQmDawPJw1e-4JIGhPPgn3Y-dqMUZLI";
+const TREASURY_ADDRESS = "UQDaIY3Ay61eLDg6AdML6SS698-jkXaDAuqeiAWd6QffXezc";
 const TONCENTER_BASE = "https://toncenter.com/api/v2";
-const MIN_TON_AMOUNT = 100000000n; // 0.1 TON in nanoTON
+const MIN_UPGRADE_TON = 1000000000n; // 1 TON
+const MIN_VERIFY_TON = 500000000n;   // 0.5 TON
 const TONCENTER_API_KEY = Deno.env.get("TONCENTER_API_KEY") || "";
 const CACHE_TTL_MS = 6000; // 6s cache — TON blocks every ~5s, safe to reuse
 
@@ -186,7 +187,8 @@ serve(async (req: Request) => {
           : friendlyAddressToRaw(inMsg.source);
 
         const value = BigInt(inMsg.value || "0");
-        return sourceRaw === userWalletRaw && value >= MIN_TON_AMOUNT;
+        const minAmount = body.type === "verify" ? MIN_VERIFY_TON : MIN_UPGRADE_TON;
+        return sourceRaw === userWalletRaw && value >= minAmount;
       });
 
       if (!match) {

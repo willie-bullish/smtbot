@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useLayoutEffect } from 'react';
 import TaskPage from '../components/TaskPage';
 import HomePage from '../components/HomePage';
 import ProfilePage from '../components/ProfilePage';
@@ -8,8 +8,9 @@ const MainPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'task' | 'home' | 'profile'>('home');
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     scrollRef.current?.scrollTo(0, 0);
+    window.scrollTo(0, 0);
   }, [activeTab]);
 
   const tabs = [

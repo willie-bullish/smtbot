@@ -21,12 +21,14 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   refreshUser: () => Promise<void>
+  isNewUser: boolean
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
-  refreshUser: async () => {}
+  refreshUser: async () => {},
+  isNewUser: false
 })
 
 export function useAuthContext() {
@@ -72,6 +74,7 @@ async function callCreateUser() {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isNewUser, setIsNewUser] = useState(false)
   const initialized = useRef(false)
   const channelRef = useRef<RealtimeChannel | null>(null)
 
@@ -99,6 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return
       }
 
+      setIsNewUser(true)
       const newUser = await callCreateUser()
 
       if (newUser) {
@@ -173,7 +177,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, loading, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, refreshUser, isNewUser }}>
       {children}
     </AuthContext.Provider>
   )

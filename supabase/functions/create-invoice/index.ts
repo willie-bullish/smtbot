@@ -45,7 +45,7 @@ serve(async (req: Request) => {
           payload: `${isUpgrade ? 'upgrade' : 'verify'}_${body.user_id}`,
           provider_token: "",
           currency: "XTR",
-          prices: [{ label: isUpgrade ? "Premium" : "Verification", amount: 1 }],
+          prices: [{ label: isUpgrade ? "Premium" : "Verification", amount: isUpgrade ? 200 : 150 }],
         }),
       }
     );

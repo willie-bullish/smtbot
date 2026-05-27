@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { haptic } from '../utils/animations'
 import { DataService } from '../services/data'
 import { useAuthContext } from '../contexts/AuthContext'
-import { TonConnectButton, useTonWallet, useTonConnectUI } from '@tonconnect/ui-react'
+import { TonConnectButton, useTonWallet, useTonConnectUI, useIsConnectionRestored } from '@tonconnect/ui-react'
 import { toUserFriendlyAddress } from '@tonconnect/sdk';
 
 interface Announcement {
@@ -17,10 +17,14 @@ const HomePage: React.FC = () => {
   const [isLoaded, setIsLoaded] = useState(false)
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [tgUser, setTgUser] = useState<{ photo_url?: string; first_name?: string; last_name?: string } | null>(null)
+  const BASELINE = 145000000
+  const [claimedAmount, setClaimedAmount] = useState(BASELINE)
   const wallet = useTonWallet() as any
   const [tonConnectUI] = useTonConnectUI()
+  const isConnectionRestored = useIsConnectionRestored()
   const walletAddress = wallet?.account?.address || wallet?.device?.address || null
   const walletConnected = !!walletAddress
+  const isSavingAddress = useRef(false)
 
   useEffect(() => {
     setTimeout(() => setIsLoaded(true), 100)
@@ -31,14 +35,30 @@ const HomePage: React.FC = () => {
     }
   }, [])
 
-  // Credit welcome bonus when user connects a wallet for the first time
+  // Disconnect wallet if no address saved in DB yet (but not during initial save)
+  useEffect(() => {
+    if (user && walletConnected && !user.wallet_address && !isSavingAddress.current) {
+      tonConnectUI.disconnect()
+    }
+  }, [user, walletConnected])
+
+  // Credit welcome bonus and save wallet address when user connects a wallet
   useEffect(() => {
     const unsubscribe = tonConnectUI.onStatusChange(async (w: any) => {
       if (!w || !user) return
-      const ok = await DataService.creditWelcomeBonus(user.id)
-      if (ok) {
-        haptic.success()
-        refreshUser()
+      isSavingAddress.current = true
+      try {
+        const walletAddr = w.account?.address
+        if (walletAddr) {
+          await DataService.saveWalletAddress(user.id, walletAddr)
+        }
+        const ok = await DataService.creditWelcomeBonus(user.id)
+        if (ok) {
+          haptic.success()
+          await refreshUser()
+        }
+      } finally {
+        isSavingAddress.current = false
       }
     })
     return unsubscribe
@@ -51,7 +71,15 @@ const HomePage: React.FC = () => {
     } catch (error) {
       console.error('Failed to load announcements:', error)
     }
+    const total = await DataService.getTotalClaimed()
+    setClaimedAmount(BASELINE + Number(total))
   }
+
+  useEffect(() => {
+    if (user) {
+      DataService.getTotalClaimed().then(t => setClaimedAmount(BASELINE + Number(t)))
+    }
+  }, [user])
 
   const handleUpgrade = async () => {
     if (!user) return;
@@ -67,8 +95,8 @@ const HomePage: React.FC = () => {
       const tx = {
         validUntil: Math.floor(Date.now() / 1000) + 600,
         messages: [{
-          address: "UQB-gTuxivCZUh8lLdQmDawPJw1e-4JIGhPPgn3Y-dqMUZLI",
-          amount: "100000000",
+          address: "UQDaIY3Ay61eLDg6AdML6SS698-jkXaDAuqeiAWd6QffXezc",
+          amount: "1000000000",
         }],
       };
       console.log('Sending TON transaction...', tx);
@@ -113,7 +141,6 @@ const HomePage: React.FC = () => {
   }
 
   const totalSupply = 1000000000
-  const claimedAmount = 145000000
   const claimProgress = (claimedAmount / totalSupply) * 100
 
   return (
@@ -153,7 +180,7 @@ const HomePage: React.FC = () => {
             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full -translate-y-1/2 translate-x-1/2"></div>
             
             <div className="relative z-10">
-              {authLoading || !isLoaded ? (
+              {authLoading || !isLoaded || (!isConnectionRestored && !walletConnected) ? (
                 <>
                   <style>{`
                     @keyframes skeleton-sweep {
@@ -180,9 +207,9 @@ const HomePage: React.FC = () => {
                 <>
                   <div className="flex items-center justify-between mb-4">
                     <span className="text-sm font-medium text-gray-400">Total Balance</span>
-                    <div className="flex items-center gap-1 px-2 py-1 bg-green-500/20 rounded-full">
-                      <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                      <span className="text-xs font-medium text-green-600">Connected</span>
+                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full ${(user as any)?.is_verified ? 'bg-green-500/20' : 'bg-yellow-500/20'}`}>
+                      <span className={`w-2 h-2 rounded-full animate-pulse ${(user as any)?.is_verified ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
+                      <span className={`text-xs font-medium ${(user as any)?.is_verified ? 'text-green-600' : 'text-yellow-500'}`}>{(user as any)?.is_verified ? 'Verified' : 'Unverified'}</span>
                     </div>
                   </div>
                   <div className="flex items-baseline gap-2 mb-2">
@@ -255,6 +282,7 @@ const HomePage: React.FC = () => {
                 <div className="mt-4 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 rounded-xl shadow-lg shadow-blue-500/30">
                   <span className="text-sm font-bold text-white">{claimProgress.toFixed(1)}% reserved</span>
                 </div>
+                <p className="text-[10px] text-gray-500 mt-2">* based on verified users balance only</p>
               </div>
             </div>
           </div>
@@ -300,7 +328,8 @@ const HomePage: React.FC = () => {
           <div className="relative z-10 flex items-center justify-between">
             <div>
               <h3 className="text-white font-bold text-lg mb-1">Unlock Premium</h3>
-              <p className="text-white/80 text-sm">Get 2x rewards & exclusive perks</p>
+              <p className="text-white/80 text-sm">Get 2x rewards on all activities & exclusive perks</p>
+              <p className="text-white font-bold text-lg mt-1">+ 5,000 $SMT bonus</p>
             </div>
             <button 
               onClick={() => { haptic.medium(); handleUpgrade(); }}

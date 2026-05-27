@@ -88,7 +88,7 @@ export const DataService = {
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('id, username, full_name, created_at')
+        .select('id, username, full_name, created_at, is_verified')
         .eq('referrer_id', userId)
         .order('created_at', { ascending: false })
         .limit(50)
@@ -294,6 +294,21 @@ export const DataService = {
       clearTimeout(timeout)
       console.error('Welcome bonus failed:', e)
       return false
+    }
+  },
+
+  async getTotalClaimed() {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    try {
+      const { data, error } = await supabase.rpc('get_total_claimed')
+      clearTimeout(timeout)
+      if (error) throw error
+      return data || 0
+    } catch (e) {
+      clearTimeout(timeout)
+      console.error('Get total claimed failed:', e)
+      return 0
     }
   },
 

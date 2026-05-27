@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { haptic, particles } from '../utils/animations';
+import { useAuthContext } from '../contexts/AuthContext';
 
 interface Slide {
   id: number;
@@ -14,6 +15,16 @@ const WelcomePage: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const navigate = useNavigate();
+  const { loading, isNewUser } = useAuthContext();
+
+  useEffect(() => {
+    if (!loading && !isNewUser) {
+      navigate('/main', { replace: true });
+    }
+  }, [loading, isNewUser, navigate]);
+
+  if (loading) return null;
+  if (!isNewUser) return null;
 
   const slides: Slide[] = [
     {

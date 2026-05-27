@@ -17,7 +17,7 @@ interface Task {
 }
 
 const TaskPage: React.FC = () => {
-  const { user, loading } = useAuthContext();
+  const { user, loading, refreshUser } = useAuthContext();
   const { showToast } = useToast();
   
   if (loading) {
@@ -162,6 +162,7 @@ const TaskPage: React.FC = () => {
         console.log('VERIFY: result:', result);
         haptic.success();
         loadTasks();
+        refreshUser();
       } catch (error) {
         console.error('Failed to verify task:', error);
       } finally {

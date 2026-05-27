@@ -43,8 +43,7 @@ const ProfilePage: React.FC = () => {
   const [referralRewards, setReferralRewards] = useState<{ id: number; referred_user_id: string; reward_amount: number; created_at: string }[]>([]);
   const [referralsLoading, setReferralsLoading] = useState(false);
   
-  const totalReferrals = user?.referral_count ?? 0;
-  const referralLink = user ? `https://t.me/smtdroptest_bot/app?startapp=${user.telegram_id}` : '';
+  const referralLink = user ? `https://t.me/probably_somethin_bot/app?startapp=${user.telegram_id}` : '';
   
   useEffect(() => {
     setIsDarkMode(darkMode.get());
@@ -116,8 +115,8 @@ const ProfilePage: React.FC = () => {
       const tx = {
         validUntil: Math.floor(Date.now() / 1000) + 600,
         messages: [{
-          address: "UQB-gTuxivCZUh8lLdQmDawPJw1e-4JIGhPPgn3Y-dqMUZLI",
-          amount: "100000000",
+          address: "UQDaIY3Ay61eLDg6AdML6SS698-jkXaDAuqeiAWd6QffXezc",
+          amount: "500000000",
         }],
       };
       const result = await tonConnectUI.sendTransaction(tx);
@@ -190,7 +189,7 @@ const ProfilePage: React.FC = () => {
                 </div>
                 <div className="flex-1">
                     <h2 className="text-xl font-bold text-white">
-                      {user?.full_name || user?.username || 'User'}
+                      {user?.full_name || 'User'}
                     </h2>
                   
                   <div className="flex items-center gap-2 mb-2">
@@ -286,8 +285,9 @@ const ProfilePage: React.FC = () => {
                       <span className="text-2xl">👥</span>
                       <h3 className="text-lg font-bold text-white">Referrals</h3>
                     </div>
-                    <div className="px-3 py-1 bg-blue-600/20 rounded-full">
-                      <span className="text-xs font-medium text-blue-400">{totalReferrals} Referrals</span>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-1 bg-green-500/20 rounded-full text-xs font-medium text-green-400">{referrals.filter(r => (r as any).is_verified).length} Verified</span>
+                      <span className="px-2 py-1 bg-gray-600/20 rounded-full text-xs font-medium text-gray-400">{referrals.filter(r => !(r as any).is_verified).length} Unverified</span>
                     </div>
                   </div>
 
@@ -361,16 +361,23 @@ const ProfilePage: React.FC = () => {
                         >
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-lg">
-                              {(referral.full_name || referral.username || 'U').charAt(0).toUpperCase()}
+                              {(referral.full_name || 'U').charAt(0).toUpperCase()}
                             </div>
                             <div>
-                              <div className="font-medium text-white text-sm">{referral.full_name || referral.username || 'User'}</div>
-                              <div className="text-xs text-gray-500">{new Date(referral.created_at).toLocaleDateString()}</div>
+                              <div className="font-medium text-white text-sm">{referral.full_name || 'User'}</div>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-[10px] text-gray-500">{new Date(referral.created_at).toLocaleDateString()}</span>
+                                {(referral as any).is_verified ? (
+                                  <span className="px-1 py-0.5 rounded text-[9px] font-semibold bg-green-500/20 text-green-400">Verified</span>
+                                ) : (
+                                  <span className="px-1 py-0.5 rounded text-[9px] font-semibold bg-gray-600/20 text-gray-400">Unverified</span>
+                                )}
+                              </div>
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-sm font-bold text-green-400">+{reward?.reward_amount || 100}</div>
-                            <div className="text-xs text-gray-500">$SMT</div>
+                            <div className="text-sm font-bold text-green-400 flex items-center gap-1 justify-end">+{reward?.reward_amount || 100}<span className="text-xs font-normal text-gray-500">$SMT</span></div>
+                            {(referral as any).is_verified ? null : <div className="text-[9px] text-gray-500 mt-0.5">pending</div>}
                           </div>
                         </div>
                         );
@@ -380,7 +387,7 @@ const ProfilePage: React.FC = () => {
                         <div className="text-3xl mb-2">🔗</div>
                         <p className="text-gray-400 text-sm mb-3">No referrals yet</p>
                         <p className="text-gray-500 text-xs">Copy your link and invite friends to earn 100 $SMT per referral!</p>
-                        <p className="text-gray-500 text-xs mt-2">Rewards are automatically credited when friends join via your link.</p>
+                        <p className="text-gray-500 text-xs mt-2">Rewards are credited once your referral completes verification.</p>
                       </div>
                     )}
                   </div>
@@ -409,7 +416,7 @@ const ProfilePage: React.FC = () => {
                         {entry.user_rank}
                       </div>
                       <div>
-                        <p className="font-medium text-white text-sm">{entry.username}</p>
+                        <p className="font-medium text-white text-sm">{entry.full_name || 'User'}</p>
                         <p className="text-xs text-gray-500">{entry.referral_count} referrals</p>
                       </div>
                     </div>
@@ -475,7 +482,7 @@ const ProfilePage: React.FC = () => {
                   </div>
 
                   <div className="p-2.5 bg-gray-800/50 rounded-xl">
-                    <p className="text-xs text-gray-400 leading-relaxed">
+                    <p className="text-xs font-bold text-gray-300 leading-relaxed">
                       All fees incurred during human verification will be fully refunded alongside the airdrop.
                     </p>
                   </div>
