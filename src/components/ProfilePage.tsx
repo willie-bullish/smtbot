@@ -422,7 +422,7 @@ const ProfilePage: React.FC = () => {
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-blue-400">{entry.balance.toLocaleString()}</p>
-                      <p className="text-xs text-gray-500">SMT</p>
+                      <p className="text-xs text-gray-500">$SMT</p>
                     </div>
                   </div>
                 ))

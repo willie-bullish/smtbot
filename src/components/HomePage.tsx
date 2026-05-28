@@ -22,7 +22,7 @@ const HomePage: React.FC = () => {
   const wallet = useTonWallet() as any
   const [tonConnectUI] = useTonConnectUI()
   const isConnectionRestored = useIsConnectionRestored()
-  const walletAddress = wallet?.account?.address || wallet?.device?.address || null
+  const walletAddress = wallet?.account?.address || wallet?.device?.address || user?.wallet_address || null
   const walletConnected = !!walletAddress
   const isSavingAddress = useRef(false)
 
@@ -316,6 +316,30 @@ const HomePage: React.FC = () => {
                 <p>No announcements yet</p>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Ambassador Program */}
+        <div className={`mt-6 p-5 rounded-3xl bg-blue-600 relative overflow-hidden transition-all duration-700 delay-500 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2"></div>
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2"></div>
+          
+          <div className="relative z-10 flex items-center justify-between">
+            <div>
+              <h3 className="text-white font-bold text-lg mb-1">Become an Ambassador</h3>
+              <p className="text-white/80 text-sm">Reward pool:</p>
+              <p className="text-white font-bold text-base">14,500,000 $SMT</p>
+              <p className="text-white font-bold text-base">& 100,000 USDC</p>
+            </div>
+            <a
+              href="https://forms.gle/VZKpGqqkLBdPJRhTA"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => haptic.medium()}
+              className="px-5 py-2.5 bg-white text-blue-600 font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 whitespace-nowrap"
+            >
+              Apply Here →
+            </a>
           </div>
         </div>
 

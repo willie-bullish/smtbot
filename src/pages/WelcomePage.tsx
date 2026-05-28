@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { haptic, particles } from '../utils/animations';
-import { useAuthContext } from '../contexts/AuthContext';
-
+import { haptic } from '../utils/animations';
 interface Slide {
   id: number;
   title: string;
@@ -15,17 +13,6 @@ const WelcomePage: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const navigate = useNavigate();
-  const { loading, isNewUser } = useAuthContext();
-
-  useEffect(() => {
-    if (!loading && !isNewUser) {
-      navigate('/main', { replace: true });
-    }
-  }, [loading, isNewUser, navigate]);
-
-  if (loading) return null;
-  if (!isNewUser) return null;
-
   const slides: Slide[] = [
     {
       id: 1,
@@ -85,26 +72,11 @@ const WelcomePage: React.FC = () => {
 
   const handleSkip = () => {
     haptic.heavy();
-    
-    const button = document.getElementById('skip-button');
-    if (button) {
-      const rect = button.getBoundingClientRect();
-      particles.burst(rect.left + rect.width / 2, rect.top + rect.height / 2, 3, ['🌌', '⚡', '💫']);
-    }
-    
     navigate('/main');
   };
 
   const handleGetStarted = () => {
     haptic.success();
-    
-    // Create dimensional portal effect
-    const button = document.getElementById('action-button');
-    if (button) {
-      const rect = button.getBoundingClientRect();
-      particles.burst(rect.left + rect.width / 2, rect.top + rect.height / 2, 20, ['🌌', '⚡', '💫', '🔮', '✨', '🌟', '🚀', '🌠', '💎', '🔷']);
-    }
-    
     setTimeout(() => {
       navigate('/main');
     }, 500);
